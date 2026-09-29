@@ -1,6 +1,6 @@
 ---
 name: design-ui
-description: Builds or updates Duru AI screens using DESIGN.md and FSD. Use when creating pages, components, layouts, login UI, chat UI, or when the user mentions design, style, Tailwind, or 화면.
+description: Builds or updates Crep AI screens using DESIGN.md and FSD. Use when creating pages, components, layouts, login UI, chat UI, or when the user mentions design, style, Tailwind, or 화면.
 ---
 
 # Design UI
@@ -17,14 +17,14 @@ description: Builds or updates Duru AI screens using DESIGN.md and FSD. Use when
 
 ### 컬러 (Tailwind neutral만 허용)
 
-| 역할 | 클래스 |
-| --- | --- |
-| Page 배경 | `bg-white` |
-| 표면 | `bg-gray-50` / `bg-gray-100` |
-| 테두리 | `border-gray-200` / `border-gray-300` |
-| 보조 텍스트 | `text-gray-400` / `text-gray-500` |
-| 기본 텍스트 | `text-gray-800` / `text-gray-900` |
-| 진한 텍스트 | `text-black` |
+| 역할         | 클래스                                  |
+| ------------ | --------------------------------------- |
+| Page 배경    | `bg-white`                              |
+| 표면         | `bg-gray-50` / `bg-gray-100`            |
+| 테두리       | `border-gray-200` / `border-gray-300`   |
+| 보조 텍스트  | `text-gray-400` / `text-gray-500`       |
+| 기본 텍스트  | `text-gray-800` / `text-gray-900`       |
+| 진한 텍스트  | `text-black`                            |
 | Primary 버튼 | `bg-black text-white hover:bg-gray-900` |
 
 임의 색상값(`bg-[#xxx]`)과 유채색(`blue-*`, `violet-*` 등)을 사용하지 않는다.

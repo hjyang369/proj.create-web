@@ -1,6 +1,6 @@
 ---
 name: develop-feature
-description: Implements the next Duru AI feature from TODO.md with FSD and a small, explained change. Use when the user asks to build the next feature, implement a page, follow TODO.md, or continue development.
+description: Implements the next Crep AI feature from TODO.md with FSD and a small, explained change. Use when the user asks to build the next feature, implement a page, follow TODO.md, or continue development.
 ---
 
 # Develop Feature

@@ -1,6 +1,6 @@
 ---
 name: understand-project
-description: Reads project markdown docs first and explains Duru AI without writing code. Use when starting a session, when the user says understand the project, read the docs, 아직 코딩하지 마, or asks what this service is.
+description: Reads project markdown docs first and explains Crep AI without writing code. Use when starting a session, when the user says understand the project, read the docs, 아직 코딩하지 마, or asks what this service is.
 ---
 
 # Understand Project
@@ -26,20 +26,24 @@ description: Reads project markdown docs first and explains Duru AI without writ
 # 프로젝트 이해
 
 ## 무엇을 만드는가
+
 - 서비스명
 - 한 줄 설명
 - 주요 사용자
 
 ## 어떻게 만드는가
+
 - 기술 스택
 - 폴더 구조
 - DB 핵심 테이블
 
 ## 지금 어디인가
+
 - TODO.md에서 끝난 일
 - 다음에 할 일
 
 ## 앞으로 작업할 때 지킬 것
+
 - 승인 없이 하면 안 되는 일 3가지
 ```
 

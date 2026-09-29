@@ -1,6 +1,6 @@
 ---
 name: tailwind-clean
-description: Writes clean and consistent Tailwind CSS class strings in Duru AI frontend. Use when writing or reviewing Tailwind classes, cleaning up cluttered className strings, or when the user asks for clean Tailwind code.
+description: Writes clean and consistent Tailwind CSS class strings in Crep AI frontend. Use when writing or reviewing Tailwind classes, cleaning up cluttered className strings, or when the user asks for clean Tailwind code.
 ---
 
 # Tailwind Clean
@@ -59,11 +59,11 @@ Tailwind 클래스를 깔끔하고 일관되게 작성한다.
 `cn` 위치: `shared/lib/cn.ts`
 
 ```ts
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 ```
 
