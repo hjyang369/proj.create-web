@@ -1,0 +1,13 @@
+---
+description: Secret and environment security rules
+alwaysApply: true
+---
+
+# Security
+
+- `.env`, `.env.local`, `.env.production`을 읽거나 채팅에 붙여 넣지 않는다.
+- API Key, Secret, 토큰, 비밀번호를 소스코드, 문서, 커밋에 넣지 않는다.
+- 환경변수 이름은 `.env.example`에만 적고, 값은 적지 않는다.
+- 프론트는 `.env.local`, 백엔드는 `.env`를 사용한다.
+- 사용자 데이터는 NestJS에서 본인 소유인지 확인한 뒤에만 읽고 쓴다.
+- 사용자의 승인 없이 테이블, 파일, 계정을 삭제하지 않는다.

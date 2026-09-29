@@ -1,0 +1,22 @@
+---
+description: MySQL and Drizzle rules
+globs: "backend/{src/database,drizzle}/**/*.{ts,sql}"
+alwaysApply: false
+---
+
+# Database
+
+- MySQL과 Drizzle ORM을 사용한다.
+- 기존 Schema는 `DATABASE.md`를 먼저 확인한다.
+- 테이블은 Drizzle schema로 정의하고 Migration으로 변경한다.
+- 기존 테이블 또는 컬럼을 임의로 삭제하지 않는다.
+- Schema를 바꿔야 하면 이유 설명 → 제안 → Drizzle schema/Migration → 사용자 확인 후에만 적용한다.
+
+```sql
+-- ❌ BAD
+DROP TABLE messages;
+
+-- ✅ GOOD
+ALTER TABLE conversations
+ADD COLUMN model VARCHAR(100) NULL;
+```

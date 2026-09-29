@@ -1,0 +1,65 @@
+---
+description: NestJS backend rules
+globs: "backend/**/*.{ts,js}"
+alwaysApply: false
+---
+
+# Backend
+
+- NestJS와 TypeScript를 사용한다.
+- DB 접근은 Drizzle만 사용한다. MySQL 쿼리를 프론트에 두지 않는다.
+- 새 기능은 `backend/src/modules/`에 모듈로 추가한다.
+- 테이블 정의는 `backend/src/database/schema/`에 둔다.
+- API Key와 Secret은 코드에 직접 작성하지 않는다.
+- 환경변수는 `backend/.env`를 사용한다.
+- 요청 데이터는 사용 전에 검증한다.
+- 에러는 초보자가 이해할 수 있는 메시지로 반환한다.
+- 요청 바디 검증은 `class-validator` + `class-transformer`로 한다.
+- 컨트롤러 DTO에는 반드시 `class-validator` 데코레이터를 붙인다.
+- `main.ts`에 `ValidationPipe`를 전역으로 등록한다.
+
+```ts
+// ✅ DTO 예시
+import { IsEmail, IsString, MinLength } from 'class-validator'
+
+export class CreateUserDto {
+  @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다.' })
+  email: string
+
+  @IsString()
+  @MinLength(2, { message: '이름은 2자 이상이어야 합니다.' })
+  name: string
+
+  @IsString()
+  @MinLength(8, { message: '비밀번호는 8자 이상이어야 합니다.' })
+  password: string
+}
+```
+
+```ts
+// ✅ main.ts — ValidationPipe 전역 등록
+import { ValidationPipe } from '@nestjs/common'
+
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,       // DTO에 없는 필드는 자동 제거
+    forbidNonWhitelisted: true, // 없는 필드가 오면 400 에러
+    transform: true,       // 요청 데이터를 DTO 타입으로 자동 변환
+  }),
+)
+```
+
+```ts
+// ❌ BAD — 직접 if 검증
+if (!body.email || !body.email.includes('@')) {
+  throw new Error('이메일 오류')
+}
+```
+
+```ts
+// ❌ BAD
+const db = mysql.createConnection("mysql://root:password@localhost/duru")
+
+// ✅ GOOD
+const db = drizzle(process.env.DATABASE_URL!)
+```

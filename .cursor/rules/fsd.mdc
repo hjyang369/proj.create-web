@@ -1,0 +1,26 @@
+---
+description: Feature-Sliced Design import and folder rules
+globs: "frontend/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# FSD
+
+레이어는 아래 순서만 허용한다.
+
+app → pages → widgets → features → entities → shared
+
+- 위 레이어가 아래 레이어만 import 한다.
+- 같은 레이어의 다른 slice를 직접 import 하지 않는다.
+- slice 바깥에서는 `index.ts`만 import 한다.
+- Next.js `app/`에는 라우팅과 레이아웃만 둔다. 긴 UI는 `pages/` 또는 `widgets/`에 둔다.
+- Zustand store는 해당 feature/entity의 `model/`에 둔다.
+- 사용자의 승인 없이 FSD 밖 폴더 구조를 만들지 않는다.
+
+```ts
+// ❌ BAD
+import { LoginForm } from "@/features/auth/ui/LoginForm"
+
+// ✅ GOOD
+import { LoginForm } from "@/features/auth"
+```
