@@ -8,7 +8,7 @@
 - [ ] NestJS 프로젝트 생성
 - [ ] MySQL + Drizzle 연결
 - [ ] DB 스키마 작성 (users, sites, site_inputs, site_images, site_pages, site_edit_history)
-- [ ] 회원가입
+- [x] 회원가입
 - [ ] 로그인
 - [ ] 로그아웃
 

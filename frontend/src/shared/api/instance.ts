@@ -25,8 +25,10 @@ instance.interceptors.request.use((config) => {
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message =
-      error.response?.data?.message ?? "알 수 없는 오류가 발생했습니다.";
+    const rawMessage = error.response?.data?.message;
+    const message = Array.isArray(rawMessage)
+      ? rawMessage.join(" ")
+      : (rawMessage ?? "알 수 없는 오류가 발생했습니다.");
     return Promise.reject(new Error(message));
   }
 );

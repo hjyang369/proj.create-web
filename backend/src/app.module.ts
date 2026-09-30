@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { AppController } from "./app.controller.js";
 import { AppService } from "./app.service.js";
 import { DatabaseModule } from "./database/database.module.js";
+import { AuthModule } from "./modules/auth/auth.module.js";
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { DatabaseModule } from "./database/database.module.js";
       isGlobal: true, // 모든 모듈에서 process.env 사용 가능
     }),
     DatabaseModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
