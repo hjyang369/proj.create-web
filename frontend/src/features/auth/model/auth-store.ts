@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import type { SignupUser } from "../api/signup";
-import { persistSession } from "./session-storage";
+import { clearSession, persistSession } from "./session-storage";
 
 type AuthState = {
   user: SignupUser | null;
   setSession: (accessToken: string, user: SignupUser) => void;
+  logout: () => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -13,5 +14,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem("access_token", accessToken);
     persistSession(user);
     set({ user });
+  },
+  logout: () => {
+    clearSession();
+    set({ user: null });
   },
 }));

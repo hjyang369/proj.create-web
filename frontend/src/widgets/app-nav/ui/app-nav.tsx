@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSession } from "@/features/auth";
+import { useRouter } from "next/navigation";
+import { useAuthStore, useSession } from "@/features/auth";
 import { getAppNavActions } from "../model/app-nav-actions";
 
 const buttonClassName = `flex shrink-0 items-center justify-center
@@ -11,6 +12,8 @@ const buttonClassName = `flex shrink-0 items-center justify-center
   hover:bg-gray-900`;
 
 export function AppNav() {
+  const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
   const { ready, user } = useSession();
   const actions = ready ? getAppNavActions(user) : [];
 
@@ -24,21 +27,41 @@ export function AppNav() {
           CREP AI
         </Link>
         <div className="flex min-w-0 items-center gap-3">
-          {actions.map((action) =>
-            action.href ? (
-              <Link
-                key={action.href}
-                href={action.href}
-                className={buttonClassName}
-              >
-                {action.label}
-              </Link>
-            ) : (
+          {actions.map((action) => {
+            if (action.kind === "logout") {
+              return (
+                <button
+                  key="logout"
+                  type="button"
+                  className={buttonClassName}
+                  onClick={() => {
+                    logout();
+                    router.push("/");
+                  }}
+                >
+                  {action.label}
+                </button>
+              );
+            }
+
+            if (action.href) {
+              return (
+                <Link
+                  key={action.href}
+                  href={action.href}
+                  className={buttonClassName}
+                >
+                  {action.label}
+                </Link>
+              );
+            }
+
+            return (
               <p key={action.label} className="truncate text-sm text-gray-500">
                 {action.label}
               </p>
-            ),
-          )}
+            );
+          })}
         </div>
       </div>
     </header>

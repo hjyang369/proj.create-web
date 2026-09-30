@@ -41,3 +41,11 @@ export function persistSession(user: SignupUser) {
   loaded = true;
   listeners.forEach((listener) => listener());
 }
+
+export function clearSession() {
+  localStorage.removeItem("auth_user");
+  localStorage.removeItem("access_token");
+  snapshot = null;
+  loaded = true;
+  listeners.forEach((listener) => listener());
+}

@@ -10,7 +10,7 @@
 - [x] DB 스키마 작성 (users, sites, site_inputs, site_images, site_pages, site_edit_history)
 - [x] 회원가입
 - [x] 로그인
-- [ ] 로그아웃
+- [x] 로그아웃
 
 ---
 

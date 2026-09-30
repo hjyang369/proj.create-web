@@ -9,10 +9,11 @@ describe("getAppNavActions", () => {
     ]);
   });
 
-  it("로그인 후에는 이름과 사이트 만들기 링크를 보여 준다", () => {
+  it("로그인 후에는 이름, 사이트 만들기, 로그아웃을 보여 준다", () => {
     assert.deepEqual(getAppNavActions({ name: "하나" }), [
       { label: "하나님" },
       { href: "/create", label: "사이트 만들기" },
+      { kind: "logout", label: "로그아웃" },
     ]);
   });
 });
