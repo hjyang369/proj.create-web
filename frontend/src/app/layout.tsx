@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppNav } from "@/widgets/app-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" className="h-full">
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
+      <body className="flex min-h-full flex-col bg-white text-gray-900 antialiased">
+        <AppNav />
+        {children}
+      </body>
     </html>
   );
 }
