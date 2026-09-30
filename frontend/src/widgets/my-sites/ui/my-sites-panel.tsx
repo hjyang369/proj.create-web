@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "@/features/auth";
 import {
@@ -54,9 +55,37 @@ export function MySitesPanel() {
   const view = describeSiteList(resolveSiteListState({ ready, user }, state));
 
   return (
-    <main className="mx-auto w-full max-w-[1200px] flex-1 px-6 py-12">
+    <main
+      className={
+        view.action
+          ? `mx-auto flex flex-1 flex-col
+            min-h-[calc(100dvh-3.5rem)] w-full max-w-[1200px]
+            px-6 py-12`
+          : "mx-auto w-full max-w-[1200px] flex-1 px-6 py-12"
+      }
+    >
       <h1 className="text-2xl font-semibold text-black">{view.title}</h1>
-      {view.message ? (
+      {view.action ? (
+        <div
+          className="flex flex-1 flex-col items-center justify-center
+            text-center"
+        >
+          {view.message ? (
+            <p className="text-sm text-gray-500">{view.message}</p>
+          ) : null}
+          <Link
+            href={view.action.href}
+            className="inline-flex items-center justify-center
+              h-10
+              mt-4 px-4
+              text-sm font-medium text-white
+              bg-black rounded-lg
+              hover:bg-gray-900"
+          >
+            {view.action.label}
+          </Link>
+        </div>
+      ) : view.message ? (
         <p className="mt-6 text-sm text-gray-500">{view.message}</p>
       ) : null}
       {view.items.length > 0 ? (

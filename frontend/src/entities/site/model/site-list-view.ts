@@ -27,9 +27,15 @@ export type SiteListViewItem = {
   thumbnailUrl: string | null;
 };
 
+export type SiteListAction = {
+  href: string;
+  label: string;
+};
+
 export type SiteListView = {
   title: string;
   message: string | null;
+  action: SiteListAction | null;
   items: SiteListViewItem[];
 };
 
@@ -69,6 +75,7 @@ export function describeSiteList(state: SiteListState): SiteListView {
     return {
       title,
       message: null,
+      action: null,
       items: state.sites.map((site) => ({
         id: site.id,
         name: site.name,
@@ -84,6 +91,7 @@ export function describeSiteList(state: SiteListState): SiteListView {
     return {
       title,
       message: "아직 만든 사이트가 없습니다.",
+      action: { href: "/create", label: "사이트 만들기" },
       items: [],
     };
   }
@@ -92,6 +100,7 @@ export function describeSiteList(state: SiteListState): SiteListView {
     return {
       title,
       message: "로그인하면 내가 만든 사이트를 볼 수 있습니다.",
+      action: null,
       items: [],
     };
   }
@@ -100,6 +109,7 @@ export function describeSiteList(state: SiteListState): SiteListView {
     return {
       title,
       message: state.message,
+      action: null,
       items: [],
     };
   }
@@ -107,6 +117,7 @@ export function describeSiteList(state: SiteListState): SiteListView {
   return {
     title,
     message: "사이트를 불러오는 중입니다.",
+    action: null,
     items: [],
   };
 }

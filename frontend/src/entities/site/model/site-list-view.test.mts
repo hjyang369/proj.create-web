@@ -16,6 +16,7 @@ describe("describeSiteList", () => {
     assert.deepEqual(describeSiteList({ kind: "ready", sites: [cafe] }), {
       title: "내 사이트",
       message: null,
+      action: null,
       items: [
         {
           id: 1,
@@ -33,15 +34,16 @@ describe("describeSiteList", () => {
     assert.deepEqual(describeSiteList({ kind: "empty" }), {
       title: "내 사이트",
       message: "아직 만든 사이트가 없습니다.",
+      action: { href: "/create", label: "사이트 만들기" },
       items: [],
     });
   });
 
   it("로그인하지 않으면 목록 대신 로그인 안내를 보여 준다", () => {
-    assert.equal(
-      describeSiteList({ kind: "guest" }).message,
-      "로그인하면 내가 만든 사이트를 볼 수 있습니다.",
-    );
+    const view = describeSiteList({ kind: "guest" });
+
+    assert.equal(view.message, "로그인하면 내가 만든 사이트를 볼 수 있습니다.");
+    assert.equal(view.action, null);
   });
 
   it("앱 배포 사이트는 앱과 배포됨으로 보여 준다", () => {
