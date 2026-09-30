@@ -4,12 +4,12 @@
 
 ## Phase 1 — 기반 세팅
 
-- [ ] Next.js App Router 프로젝트 생성
-- [ ] NestJS 프로젝트 생성
-- [ ] MySQL + Drizzle 연결
-- [ ] DB 스키마 작성 (users, sites, site_inputs, site_images, site_pages, site_edit_history)
+- [x] Next.js App Router 프로젝트 생성
+- [x] NestJS 프로젝트 생성
+- [x] MySQL + Drizzle 연결
+- [x] DB 스키마 작성 (users, sites, site_inputs, site_images, site_pages, site_edit_history)
 - [x] 회원가입
-- [ ] 로그인
+- [x] 로그인
 - [ ] 로그아웃
 
 ---

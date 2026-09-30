@@ -1,4 +1,4 @@
-import { ConflictException } from "@nestjs/common";
+import { ConflictException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcrypt";
 import { AuthService } from "./auth.service.js";
@@ -102,5 +102,70 @@ describe("AuthService.signup", () => {
         password: "password123",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe("AuthService.login", () => {
+  it("이메일과 비밀번호가 맞으면 토큰과 공개 사용자 정보만 돌려준다", async () => {
+    const store = memoryStore();
+    const jwt = new JwtService({ secret: "test-secret" });
+    const service = new AuthService(store, jwt);
+
+    await service.signup({
+      email: "user@example.com",
+      name: "홍길동",
+      password: "password123",
+    });
+
+    const result = await service.login({
+      email: "user@example.com",
+      password: "password123",
+    });
+
+    expect(result.user).toEqual({
+      id: 1,
+      email: "user@example.com",
+      name: "홍길동",
+    });
+    expect(result).not.toHaveProperty("password");
+    expect(result).not.toHaveProperty("passwordHash");
+
+    const payload = jwt.verify<{ sub: number; email: string }>(
+      result.accessToken,
+    );
+    expect(payload.sub).toBe(1);
+    expect(payload.email).toBe("user@example.com");
+  });
+
+  it("비밀번호가 다르면 토큰을 주지 않는다", async () => {
+    const store = memoryStore();
+    const service = new AuthService(store, new JwtService({ secret: "test-secret" }));
+
+    await service.signup({
+      email: "user@example.com",
+      name: "홍길동",
+      password: "password123",
+    });
+
+    await expect(
+      service.login({
+        email: "user@example.com",
+        password: "wrong-password",
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("등록되지 않은 이메일이면 토큰을 주지 않는다", async () => {
+    const service = new AuthService(
+      memoryStore(),
+      new JwtService({ secret: "test-secret" }),
+    );
+
+    await expect(
+      service.login({
+        email: "missing@example.com",
+        password: "password123",
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

@@ -1,4 +1,9 @@
-import { ConflictException, Inject, Injectable } from "@nestjs/common";
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcrypt";
 import {
@@ -28,6 +33,11 @@ function isDuplicateEntry(error: unknown): boolean {
 export type SignupInput = {
   email: string;
   name: string;
+  password: string;
+};
+
+export type LoginInput = {
+  email: string;
   password: string;
 };
 
@@ -64,5 +74,32 @@ export class AuthService {
     });
 
     return { accessToken, user };
+  }
+
+  async login(input: LoginInput) {
+    const existing = await this.users.findByEmail(input.email);
+    const passwordMatches =
+      existing !== null &&
+      (await bcrypt.compare(input.password, existing.passwordHash));
+
+    if (!existing || !passwordMatches) {
+      throw new UnauthorizedException(
+        "이메일 또는 비밀번호가 올바르지 않습니다.",
+      );
+    }
+
+    const accessToken = await this.jwt.signAsync({
+      sub: existing.id,
+      email: existing.email,
+    });
+
+    return {
+      accessToken,
+      user: {
+        id: existing.id,
+        email: existing.email,
+        name: existing.name,
+      },
+    };
   }
 }

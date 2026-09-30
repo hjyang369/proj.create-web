@@ -9,6 +9,12 @@ const buttonClassName = `flex items-center justify-center
   bg-black rounded-lg
   hover:bg-gray-900`;
 
+const outlineButtonClassName = `flex items-center justify-center
+  h-10 px-4
+  text-sm font-medium text-gray-900
+  bg-white border border-gray-300 rounded-lg
+  hover:bg-gray-100`;
+
 export function HomeSessionActions() {
   const { ready, user } = useSession();
 
@@ -25,8 +31,13 @@ export function HomeSessionActions() {
   }
 
   return (
-    <Link href="/signup" className={buttonClassName}>
-      회원가입
-    </Link>
+    <div className="flex items-center gap-3">
+      <Link href="/login" className={buttonClassName}>
+        로그인
+      </Link>
+      <Link href="/signup" className={outlineButtonClassName}>
+        회원가입
+      </Link>
+    </div>
   );
 }
