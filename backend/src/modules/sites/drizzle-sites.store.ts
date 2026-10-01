@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import {
   DATABASE_TOKEN,
   type AppDatabase,
@@ -9,8 +9,10 @@ import { siteInputs } from "../../database/schema/site-inputs.js";
 import { siteImages } from "../../database/schema/site-images.js";
 import { sitePages } from "../../database/schema/site-pages.js";
 import type { GeneratedSitePage } from "./site-generation-response.js";
+import { readStoredPageContent } from "./site-page-content.js";
 import type {
   SitesStore,
+  StoredOwnedSite,
   StoredSite,
   CreateSiteRecord,
 } from "./sites.store.js";
@@ -154,5 +156,55 @@ export class DrizzleSitesStore implements SitesStore {
         })
         .where(eq(sites.id, siteId));
     });
+  }
+
+  async findOwnedWithPages(
+    userId: number,
+    siteId: number,
+  ): Promise<StoredOwnedSite | null> {
+    const rows = await this.db
+      .select({
+        id: sites.id,
+        userId: sites.userId,
+        name: sites.name,
+        pageType: sitePages.pageType,
+        pageOrder: sitePages.pageOrder,
+        componentData: sitePages.componentData,
+      })
+      .from(sites)
+      .leftJoin(sitePages, eq(sitePages.siteId, sites.id))
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .orderBy(asc(sitePages.pageOrder));
+
+    const first = rows[0];
+    if (!first) {
+      return null;
+    }
+
+    const pages: StoredOwnedSite["pages"] = [];
+    for (const row of rows) {
+      if (row.pageType == null || row.pageOrder == null) {
+        continue;
+      }
+
+      const content = readStoredPageContent(row.componentData);
+      if (!content) {
+        continue;
+      }
+
+      pages.push({
+        pageType: row.pageType,
+        pageOrder: row.pageOrder,
+        html: content.html,
+        css: content.css,
+      });
+    }
+
+    return {
+      id: first.id,
+      userId: first.userId,
+      name: first.name,
+      pages,
+    };
   }
 }

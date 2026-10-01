@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
   Post,
   Req,
   UploadedFiles,
@@ -31,6 +33,15 @@ export class SitesController {
   @UseGuards(JwtAuthGuard)
   list(@Req() request: { user: AuthUser }) {
     return this.sitesService.listMine(request.user.id);
+  }
+
+  @Get(":id")
+  @UseGuards(JwtAuthGuard)
+  getOne(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+  ) {
+    return this.sitesService.getMine(request.user.id, id);
   }
 
   @Post()

@@ -47,6 +47,20 @@ export type CreateSiteRecord = {
   photos: Array<{ url: string; originalName: string }>;
 };
 
+export type StoredSitePageContent = {
+  pageType: string;
+  pageOrder: number;
+  html: string;
+  css: string;
+};
+
+export type StoredOwnedSite = {
+  id: number;
+  userId: number;
+  name: string;
+  pages: StoredSitePageContent[];
+};
+
 export type SitesStore = {
   listByUserId: (userId: number) => Promise<StoredSite[]>;
   create: (data: CreateSiteRecord) => Promise<{ id: number }>;
@@ -54,6 +68,10 @@ export type SitesStore = {
     siteId: number,
     pages: GeneratedSitePage[],
   ) => Promise<void>;
+  findOwnedWithPages: (
+    userId: number,
+    siteId: number,
+  ) => Promise<StoredOwnedSite | null>;
 };
 
 export const SITES_STORE = Symbol("SITES_STORE");

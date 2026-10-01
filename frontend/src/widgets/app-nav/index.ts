@@ -1,1 +1,1 @@
-export { AppNav } from "./ui/app-nav";
+export { AppNavSlot } from "./ui/app-nav-slot";

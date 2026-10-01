@@ -1,4 +1,8 @@
-import { BadGatewayException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { SitesService } from './sites.service.js';
 import type { CreateSiteDto } from './dto/create-site.dto.js';
 import type { GeneratedSitePage } from './site-generation-response.js';
@@ -137,6 +141,9 @@ describe('SitesService.create', () => {
           return { id: 1 };
         },
         async saveGeneratedPages() {},
+        async findOwnedWithPages() {
+          return null;
+        },
       },
       {
         async generatePages() {
@@ -162,6 +169,9 @@ describe('SitesService.create', () => {
         },
         async saveGeneratedPages(siteId, pages) {
           savedPages = { siteId, pages };
+        },
+        async findOwnedWithPages() {
+          return null;
         },
       },
       {
@@ -190,6 +200,9 @@ describe('SitesService.create', () => {
         async saveGeneratedPages() {
           savedPages = true;
         },
+        async findOwnedWithPages() {
+          return null;
+        },
       },
       {
         async generatePages() {
@@ -202,5 +215,88 @@ describe('SitesService.create', () => {
       service.create(1, createDto, undefined, []),
     ).rejects.toBeInstanceOf(BadGatewayException);
     expect(savedPages).toBe(false);
+  });
+});
+
+describe('SitesService.getMine', () => {
+  it('내 사이트의 페이지 html과 css만 페이지 순서로 돌려준다', async () => {
+    const service = new SitesService(
+      {
+        async findOwnedWithPages() {
+          return {
+            id: 1,
+            userId: 1,
+            name: '카페',
+            pages: [
+              {
+                pageType: 'contact',
+                pageOrder: 2,
+                html: '<main>문의</main>',
+                css: 'main { color: black; }',
+              },
+              {
+                pageType: 'company_intro',
+                pageOrder: 1,
+                html: '<main>소개</main>',
+                css: 'h1 { font-size: 2rem; }',
+              },
+            ],
+          };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.getMine(1, 1)).resolves.toEqual({
+      id: 1,
+      name: '카페',
+      pages: [
+        {
+          pageType: 'company_intro',
+          pageOrder: 1,
+          html: '<main>소개</main>',
+          css: 'h1 { font-size: 2rem; }',
+        },
+        {
+          pageType: 'contact',
+          pageOrder: 2,
+          html: '<main>문의</main>',
+          css: 'main { color: black; }',
+        },
+      ],
+    });
+  });
+
+  it('다른 사람 사이트나 없는 사이트는 찾지 못했다고 알린다', async () => {
+    const service = new SitesService(
+      {
+        async findOwnedWithPages() {
+          return null;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.getMine(1, 2)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('사용자 번호가 없으면 사이트를 조회하지 않는다', async () => {
+    let called = false;
+    const service = new SitesService(
+      {
+        async findOwnedWithPages() {
+          called = true;
+          return null;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.getMine(0, 1)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(called).toBe(false);
   });
 });

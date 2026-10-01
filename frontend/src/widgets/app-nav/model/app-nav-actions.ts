@@ -4,6 +4,10 @@ export type AppNavAction = {
   kind?: "logout";
 };
 
+export function showsAppNav(pathname: string): boolean {
+  return pathname !== "/edit" && !pathname.startsWith("/edit/");
+}
+
 export function getAppNavActions(user: { name: string } | null): AppNavAction[] {
   if (!user) {
     return [{ href: "/login", label: "로그인" }];

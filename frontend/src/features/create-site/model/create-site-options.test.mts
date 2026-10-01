@@ -33,8 +33,8 @@ describe("create-site-options", () => {
     assert.ok(PAGE_OPTIONS.every((o) => o.value.length > 0 && o.label.length > 0));
   });
 
-  it("링크 필드는 6가지이다", () => {
-    assert.equal(LINK_FIELDS.length, 6);
+  it("링크 필드는 4가지이다", () => {
+    assert.equal(LINK_FIELDS.length, 4);
     assert.ok(LINK_FIELDS.every((f) => f.name && f.label && f.placeholder));
   });
 });

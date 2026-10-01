@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   Inject,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { randomUUID } from "crypto";
@@ -12,6 +13,7 @@ import {
   type CreateSiteRecord,
   type SitesStore,
   type StoredSite,
+  type StoredSitePageContent,
 } from "./sites.store.js";
 import type { CreateSiteDto } from "./dto/create-site.dto.js";
 import {
@@ -26,6 +28,12 @@ export type SiteListItem = {
   status: StoredSite["status"];
   thumbnailUrl: string | null;
   updatedAt: string;
+};
+
+export type SiteEditorDetail = {
+  id: number;
+  name: string;
+  pages: StoredSitePageContent[];
 };
 
 function toListItem(site: StoredSite): SiteListItem {
@@ -80,6 +88,29 @@ export class SitesService {
         (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
       )
       .map(toListItem);
+  }
+
+  async getMine(userId: number, siteId: number): Promise<SiteEditorDetail> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
+    }
+
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const site = await this.sites.findOwnedWithPages(userId, siteId);
+    if (!site || site.userId !== userId) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    return {
+      id: site.id,
+      name: site.name,
+      pages: [...site.pages].sort(
+        (left, right) => left.pageOrder - right.pageOrder,
+      ),
+    };
   }
 
   async create(

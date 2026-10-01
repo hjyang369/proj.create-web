@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getAppNavActions } from "./app-nav-actions.ts";
+import { getAppNavActions, showsAppNav } from "./app-nav-actions.ts";
 
 describe("getAppNavActions", () => {
   it("로그인 전에는 로그인 링크만 보여 준다", () => {
@@ -15,5 +15,14 @@ describe("getAppNavActions", () => {
       { href: "/create", label: "사이트 만들기" },
       { kind: "logout", label: "로그아웃" },
     ]);
+  });
+});
+
+describe("showsAppNav", () => {
+  it("편집 페이지에서는 기본 네브를 보여 주지 않는다", () => {
+    assert.equal(showsAppNav("/edit/10"), false);
+    assert.equal(showsAppNav("/"), true);
+    assert.equal(showsAppNav("/create"), true);
+    assert.equal(showsAppNav("/login"), true);
   });
 });
