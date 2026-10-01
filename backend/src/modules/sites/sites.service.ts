@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   Inject,
   Injectable,
   UnauthorizedException,
@@ -8,10 +9,15 @@ import { extname, join } from "path";
 import { mkdir, writeFile } from "fs/promises";
 import {
   SITES_STORE,
+  type CreateSiteRecord,
   type SitesStore,
   type StoredSite,
 } from "./sites.store.js";
 import type { CreateSiteDto } from "./dto/create-site.dto.js";
+import {
+  SITE_GENERATOR,
+  type SiteGenerator,
+} from "./site-generator.js";
 
 export type SiteListItem = {
   id: number;
@@ -56,7 +62,10 @@ async function saveFile(
 
 @Injectable()
 export class SitesService {
-  constructor(@Inject(SITES_STORE) private readonly sites: SitesStore) {}
+  constructor(
+    @Inject(SITES_STORE) private readonly sites: SitesStore,
+    @Inject(SITE_GENERATOR) private readonly generator: SiteGenerator,
+  ) {}
 
   async listMine(userId: number): Promise<SiteListItem[]> {
     if (!Number.isInteger(userId) || userId <= 0) {
@@ -91,14 +100,13 @@ export class SitesService {
       photoResults.push(await saveFile(file, "photos"));
     }
 
-    // ── optional_links JSON 구성
     const optionalLinks: Record<string, string> = {};
     if (dto.blogLink) optionalLinks.naver_blog = dto.blogLink;
     if (dto.websiteLink) optionalLinks.homepage = dto.websiteLink;
     if (dto.instagramLink) optionalLinks.instagram = dto.instagramLink;
     if (dto.youtubeLink) optionalLinks.youtube = dto.youtubeLink;
 
-    return this.sites.create({
+    const record: CreateSiteRecord = {
       userId,
       name: dto.name,
       businessType: dto.industry || null,
@@ -119,6 +127,21 @@ export class SitesService {
         Object.keys(optionalLinks).length > 0 ? optionalLinks : null,
       logo: logoResult,
       photos: photoResults,
-    });
+    };
+
+    const created = await this.sites.create(record);
+
+    try {
+      const pages = await this.generator.generatePages(record);
+      await this.sites.saveGeneratedPages(created.id, pages);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "사이트를 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+      throw new BadGatewayException(message);
+    }
+
+    return created;
   }
 }

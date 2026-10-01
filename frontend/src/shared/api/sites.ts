@@ -55,6 +55,7 @@ export async function createSite(
 
   const response = await instance.post<CreateSiteResponse>("/api/sites", form, {
     headers: { "Content-Type": "multipart/form-data" },
+    timeout: 120_000,
   });
 
   return response.data;

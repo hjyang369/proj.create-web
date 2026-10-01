@@ -91,35 +91,37 @@ export function MySitesPanel() {
       {view.items.length > 0 ? (
         <ul className="mt-8 border-t border-gray-200">
           {view.items.map((item) => (
-            <li
-              key={item.id}
-              className="flex flex-col gap-3
-                py-4
-                border-b border-gray-200
-                sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex min-w-0 items-center gap-4">
-                {item.thumbnailUrl ? (
-                  <img
-                    src={item.thumbnailUrl}
-                    alt=""
-                    className="h-14 w-14
-                      rounded-xl
-                      bg-gray-100 object-cover"
-                  />
-                ) : (
-                  <div className="h-14 w-14 rounded-xl bg-gray-100" />
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-base font-medium text-black">
-                    {item.name}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {item.typeLabel} · {item.statusLabel}
-                  </p>
+            <li key={item.id} className="border-b border-gray-200">
+              <Link
+                href={item.href}
+                className="flex flex-col gap-3
+                  py-4
+                  sm:flex-row sm:items-center sm:justify-between
+                  hover:bg-gray-50"
+              >
+                <div className="flex min-w-0 items-center gap-4">
+                  {item.thumbnailUrl ? (
+                    <img
+                      src={item.thumbnailUrl}
+                      alt=""
+                      className="h-14 w-14
+                        rounded-xl
+                        bg-gray-100 object-cover"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 rounded-xl bg-gray-100" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-medium text-black">
+                      {item.name}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {item.typeLabel} · {item.statusLabel}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <p className="text-sm text-gray-400">{item.updatedLabel}</p>
+                <p className="text-sm text-gray-400">{item.updatedLabel}</p>
+              </Link>
             </li>
           ))}
         </ul>

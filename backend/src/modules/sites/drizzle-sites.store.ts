@@ -7,6 +7,8 @@ import {
 import { sites } from "../../database/schema/sites.js";
 import { siteInputs } from "../../database/schema/site-inputs.js";
 import { siteImages } from "../../database/schema/site-images.js";
+import { sitePages } from "../../database/schema/site-pages.js";
+import type { GeneratedSitePage } from "./site-generation-response.js";
 import type {
   SitesStore,
   StoredSite,
@@ -120,6 +122,37 @@ export class DrizzleSitesStore implements SitesStore {
       }
 
       return { id: siteId };
+    });
+  }
+
+  async saveGeneratedPages(
+    siteId: number,
+    pages: GeneratedSitePage[],
+  ): Promise<void> {
+    const now = new Date();
+
+    await this.db.transaction(async (tx) => {
+      await tx.insert(sitePages).values(
+        pages.map((page) => ({
+          siteId,
+          pageType: page.pageType,
+          pageOrder: page.pageOrder,
+          componentData: {
+            html: page.html,
+            css: page.css,
+          },
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+
+      await tx
+        .update(sites)
+        .set({
+          status: "draft",
+          updatedAt: now,
+        })
+        .where(eq(sites.id, siteId));
     });
   }
 }

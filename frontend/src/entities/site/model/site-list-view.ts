@@ -25,6 +25,7 @@ export type SiteListViewItem = {
   statusLabel: string;
   updatedLabel: string;
   thumbnailUrl: string | null;
+  href: string;
 };
 
 export type SiteListAction = {
@@ -83,6 +84,7 @@ export function describeSiteList(state: SiteListState): SiteListView {
         statusLabel: statusLabels[site.status],
         updatedLabel: formatUpdatedAt(site.updatedAt),
         thumbnailUrl: site.thumbnailUrl,
+        href: `/edit/${site.id}`,
       })),
     };
   }

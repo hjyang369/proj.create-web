@@ -25,6 +25,12 @@ instance.interceptors.request.use((config) => {
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.code === "ECONNABORTED") {
+      return Promise.reject(
+        new Error("응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요."),
+      );
+    }
+
     const rawMessage = error.response?.data?.message;
     const message = Array.isArray(rawMessage)
       ? rawMessage.join(" ")

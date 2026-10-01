@@ -1,3 +1,5 @@
+import type { GeneratedSitePage } from "./site-generation-response.js";
+
 export type StoredSite = {
   id: number;
   userId: number;
@@ -48,6 +50,10 @@ export type CreateSiteRecord = {
 export type SitesStore = {
   listByUserId: (userId: number) => Promise<StoredSite[]>;
   create: (data: CreateSiteRecord) => Promise<{ id: number }>;
+  saveGeneratedPages: (
+    siteId: number,
+    pages: GeneratedSitePage[],
+  ) => Promise<void>;
 };
 
 export const SITES_STORE = Symbol("SITES_STORE");

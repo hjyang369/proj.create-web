@@ -25,6 +25,7 @@ describe("describeSiteList", () => {
           statusLabel: "편집중",
           updatedLabel: "2026년 3월 2일",
           thumbnailUrl: null,
+          href: "/edit/1",
         },
       ],
     });
@@ -68,6 +69,7 @@ describe("describeSiteList", () => {
       statusLabel: "배포됨",
       updatedLabel: "2026년 1월 16일",
       thumbnailUrl: "https://example.com/a.png",
+      href: "/edit/2",
     });
   });
 
