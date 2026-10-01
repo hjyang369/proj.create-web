@@ -38,7 +38,7 @@
   - [x] 분위기 선택 (따뜻한, 전문적인 등)
   - [x] 페이지 수 입력
   - [x] 페이지 구성 선택 (다중 선택)
-  - [x] 선택 기능 링크 입력 (위치, 블로그, SNS 등)
+  - [x] 링크 입력 (위치, 블로그, SNS 등)
   - [x] 참고 사이트 링크 (선택)
 - [x] 이미지 업로드
   - [x] 로고 업로드
@@ -71,7 +71,7 @@
 - [ ] AI 응답으로 site_pages 데이터 생성 및 저장
 - [ ] 이미지 업로드 처리 (S3 또는 로컬 스토리지)
 - [ ] 생성 완료 후 편집 페이지 리다이렉트
-- [ ] 선택 기능 링크 Safe Browsing 검사 (나중에)
+- [ ] 링크 Safe Browsing 검사 (나중에)
   - 이미 된 것: http/https만 허용, javascript/data/file 등 위험 스킴 차단, HTML 이스케이프(`escapeHtml`), 외부 링크는 새 탭 + `noopener noreferrer` (`describeSafeExternalLink`)
   - 남은 것: Google Safe Browsing으로 피싱·악성 URL 여부 검사
   - 방법: 백엔드 `.env`에 API 키를 두고 NestJS에서 검사. 프론트 `field-format.ts`의 주소 검사 뒤에 이어서 붙인다. 키는 코드에 넣지 않는다.

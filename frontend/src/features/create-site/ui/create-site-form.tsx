@@ -24,6 +24,7 @@ import {
   keepEmailChars,
   type FieldFormat,
 } from "../model/field-format";
+import { appendSelectedPhotos } from "../model/site-photos";
 
 type CreateSiteValues = {
   industry: string;
@@ -141,10 +142,14 @@ export function CreateSiteForm() {
   }
 
   function handlePhotosChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    photoPrevUrls.forEach((url) => URL.revokeObjectURL(url));
-    setPhotoFiles(files);
-    setPhotoPrevUrls(files.map((f) => URL.createObjectURL(f)));
+    const selected = Array.from(e.target.files ?? []);
+    setPhotoFiles((current) => appendSelectedPhotos(current, selected));
+    if (selected.length === 0) return;
+    setPhotoPrevUrls((current) => [
+      ...current,
+      ...selected.map((file) => URL.createObjectURL(file)),
+    ]);
+    e.target.value = "";
   }
 
   function removePhoto(index: number) {
@@ -166,7 +171,8 @@ export function CreateSiteForm() {
       <main className="mx-auto w-full max-w-[1200px] flex-1 px-6 py-12">
         <h1 className="text-2xl font-semibold text-black">사이트 만들기</h1>
         <p className="mt-2 text-sm text-gray-500">
-          회사 정보를 입력하면 AI가 사이트를 만들어 드립니다. <span className="text-gray-400">* 필수</span>
+          회사 정보를 입력하면 AI가 사이트를 만들어 드립니다.{" "}
+          <span className="text-gray-400">* 필수</span>
         </p>
 
         {/* ── 기본 정보 ── */}
@@ -423,7 +429,7 @@ export function CreateSiteForm() {
           </Field>
 
           <div>
-            <p className="text-sm font-medium text-gray-800">선택 기능 링크</p>
+            <p className="text-sm font-medium text-gray-800">링크</p>
             <p className="mt-0.5 text-xs text-gray-400">
               추가할 링크를 선택하면 입력칸이 나타납니다.
             </p>
@@ -452,7 +458,8 @@ export function CreateSiteForm() {
               })}
             </div>
             {/* 선택된 링크의 인풋 */}
-            {LINK_FIELDS.filter((f) => expandedLinks.has(f.name)).length > 0 && (
+            {LINK_FIELDS.filter((f) => expandedLinks.has(f.name)).length >
+              0 && (
               <div className="mt-4 flex flex-col gap-4">
                 {LINK_FIELDS.filter((f) => expandedLinks.has(f.name)).map(
                   ({ name, label, placeholder }) => {
@@ -570,7 +577,7 @@ export function CreateSiteForm() {
 
           <Field
             label="사이트용 사진"
-            hint="여러 장을 동시에 선택할 수 있습니다."
+            hint="여러 장을 고를 수 있고, 다시 선택하면 기존 사진에 추가됩니다."
           >
             <button
               type="button"
@@ -870,7 +877,15 @@ function LinkIcon({ name, active }: { name: string; active: boolean }) {
   }
   if (name === "websiteLink") {
     return (
-      <svg className={cls} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        className={cls}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <circle cx="12" cy="12" r="10" />
         <line x1="2" y1="12" x2="22" y2="12" />
         <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
@@ -879,7 +894,15 @@ function LinkIcon({ name, active }: { name: string; active: boolean }) {
   }
   if (name === "instagramLink") {
     return (
-      <svg className={cls} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        className={cls}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
         <circle cx="12" cy="12" r="4" />
         <circle cx="17.5" cy="6.5" r="1" fill={fill} stroke="none" />

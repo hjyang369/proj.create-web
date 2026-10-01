@@ -54,11 +54,12 @@ MySQL + Drizzle ORM을 사용한다.
 - page_count: int, default 1 — 페이지 수
 - page_components: json, nullable — 선택된 페이지 구성 목록 (배열)
 - reference_url: varchar(500), nullable — 참고 사이트 링크 (선택)
-- optional_links: json, nullable — 선택 기능 링크 (위치, 블로그, SNS 등)
+- optional_links: json, nullable — 링크 (위치, 블로그, SNS 등)
 - created_at: datetime
 - updated_at: datetime
 
 optional_links JSON 구조 예시:
+
 ```json
 {
   "location": "https://maps.google.com/...",
@@ -71,6 +72,7 @@ optional_links JSON 구조 예시:
 ```
 
 page_components JSON 구조 예시:
+
 ```json
 ["company_intro", "service_intro", "contact", "faq", "directions"]
 ```
@@ -104,6 +106,7 @@ AI가 생성한 사이트의 페이지별 컴포넌트 데이터
 - updated_at: datetime
 
 component_data JSON 구조 예시:
+
 ```json
 {
   "components": [

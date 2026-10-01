@@ -47,7 +47,7 @@ export const PAGE_OPTIONS: SelectOption[] = [
   { value: "review", label: "리뷰" },
 ];
 
-/** 선택 기능 링크 입력 (6가지) */
+/** 링크 입력 (6가지) */
 export const LINK_FIELDS: LinkField[] = [
   {
     name: "locationLink",
