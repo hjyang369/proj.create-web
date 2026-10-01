@@ -5,7 +5,13 @@ import {
   type AppDatabase,
 } from "../../database/database.provider.js";
 import { sites } from "../../database/schema/sites.js";
-import type { SitesStore, StoredSite } from "./sites.store.js";
+import { siteInputs } from "../../database/schema/site-inputs.js";
+import { siteImages } from "../../database/schema/site-images.js";
+import type {
+  SitesStore,
+  StoredSite,
+  CreateSiteRecord,
+} from "./sites.store.js";
 
 @Injectable()
 export class DrizzleSitesStore implements SitesStore {
@@ -36,5 +42,84 @@ export class DrizzleSitesStore implements SitesStore {
       updatedAt:
         row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
     }));
+  }
+
+  async create(data: CreateSiteRecord): Promise<{ id: number }> {
+    const now = new Date();
+
+    return this.db.transaction(async (tx) => {
+      // ── 1. sites 테이블에 행 삽입
+      const [siteResult] = await tx.insert(sites).values({
+        userId: data.userId,
+        name: data.name,
+        type: "web",
+        status: "generating",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const siteId = siteResult.insertId;
+
+      // ── 2. site_inputs 테이블에 입력 데이터 저장
+      await tx.insert(siteInputs).values({
+        siteId,
+        businessType: data.businessType ?? null,
+        companyName: data.name,
+        oneLineIntro: data.oneLineIntro,
+        description: data.description ?? null,
+        address: data.address ?? null,
+        phone: data.phone ?? null,
+        email: data.email ?? null,
+        purpose: data.purpose,
+        targetCustomer: data.targetCustomer ?? null,
+        mainColor: data.mainColor ?? null,
+        atmosphere: data.atmosphere ?? null,
+        extraRequest: data.extraRequest ?? null,
+        pageCount: data.pageCount,
+        pageComponents: data.pageComponents ?? null,
+        referenceUrl: data.referenceUrl ?? null,
+        optionalLinks: data.optionalLinks ?? null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // ── 3. site_images 테이블에 이미지 저장 (있을 때만)
+      const imageRows: Array<{
+        siteId: number;
+        type: "logo" | "site_image";
+        url: string;
+        originalName: string;
+        order: number;
+        createdAt: Date;
+      }> = [];
+
+      if (data.logo) {
+        imageRows.push({
+          siteId,
+          type: "logo",
+          url: data.logo.url,
+          originalName: data.logo.originalName,
+          order: 0,
+          createdAt: now,
+        });
+      }
+
+      data.photos.forEach((photo, index) => {
+        imageRows.push({
+          siteId,
+          type: "site_image",
+          url: photo.url,
+          originalName: photo.originalName,
+          order: index,
+          createdAt: now,
+        });
+      });
+
+      if (imageRows.length > 0) {
+        await tx.insert(siteImages).values(imageRows);
+      }
+
+      return { id: siteId };
+    });
   }
 }

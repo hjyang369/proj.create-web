@@ -46,11 +46,11 @@ MySQL + Drizzle ORM을 사용한다.
 - address: varchar(500), nullable — 회사 주소
 - phone: varchar(50), nullable — 연락처
 - email: varchar(255), nullable — 이메일
-- extra_contact: text, nullable — 기타 연락처 정보
 - purpose: enum('company_intro', 'investment', 'sales', 'recruitment', 'promotion', 'inquiry') — 제작 목적
 - target_customer: varchar(500), nullable — 타겟 고객
 - main_color: varchar(100), nullable — 메인 컬러 (컬러코드 또는 텍스트)
-- atmosphere: varchar(255), nullable — 분위기 (따뜻한, 전문적인 등)
+- atmosphere: enum('warm', 'professional', 'modern', 'cute', 'elegant', 'bold'), nullable — 분위기 (따뜻한, 전문적인, 모던한, 귀여운, 우아한, 강렬한)
+- extra_request: text, nullable — 추가 요청
 - page_count: int, default 1 — 페이지 수
 - page_components: json, nullable — 선택된 페이지 구성 목록 (배열)
 - reference_url: varchar(500), nullable — 참고 사이트 링크 (선택)
@@ -62,12 +62,10 @@ optional_links JSON 구조 예시:
 
 ```json
 {
-  "location": "https://maps.google.com/...",
   "naver_blog": "https://blog.naver.com/...",
   "homepage": "https://example.com",
   "instagram": "https://instagram.com/...",
-  "youtube": "https://youtube.com/...",
-  "phone": "010-1234-5678"
+  "youtube": "https://youtube.com/..."
 }
 ```
 

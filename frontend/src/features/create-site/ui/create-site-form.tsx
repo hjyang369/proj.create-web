@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
+import { createSite } from "@/shared/api";
 import type { ReactNode } from "react";
 import {
   PURPOSE_OPTIONS,
@@ -40,12 +42,10 @@ type CreateSiteValues = {
   mood: string;
   pageCount: string;
   selectedPages: string[];
-  locationLink: string;
   blogLink: string;
   websiteLink: string;
   instagramLink: string;
   youtubeLink: string;
-  contactLink: string;
   referenceLink: string;
   extraRequest: string;
 };
@@ -56,10 +56,12 @@ const textareaCls =
   "w-full px-3 py-2.5 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 resize-none";
 
 export function CreateSiteForm() {
+  const router = useRouter();
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPrevUrl, setLogoPrevUrl] = useState<string | null>(null);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPrevUrls, setPhotoPrevUrls] = useState<string[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
@@ -88,12 +90,10 @@ export function CreateSiteForm() {
       mood: "",
       pageCount: "",
       selectedPages: [],
-      locationLink: "",
       blogLink: "",
       websiteLink: "",
       instagramLink: "",
       youtubeLink: "",
-      contactLink: "",
       referenceLink: "",
       extraRequest: "",
     },
@@ -118,8 +118,18 @@ export function CreateSiteForm() {
     });
   }
 
-  const onSubmit = handleSubmit((_values) => {
-    // Phase 5에서 백엔드 연결 예정
+  const onSubmit = handleSubmit(async (values) => {
+    setSubmitError(null);
+    try {
+      const { id } = await createSite(values, logoFile, photoFiles);
+      router.push(`/edit/${id}`);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : "사이트 생성 중 오류가 발생했습니다. 다시 시도해 주세요.",
+      );
+    }
   });
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -167,6 +177,40 @@ export function CreateSiteForm() {
       noValidate
       className="flex min-h-[calc(100dvh-3.5rem)] flex-col"
     >
+      {/* ── 전체 화면 로딩 오버레이 ── */}
+      {isSubmitting && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center
+            gap-5 bg-white/90 backdrop-blur-sm"
+        >
+          {/* 스피너 */}
+          <svg
+            className="h-12 w-12 animate-spin text-black"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle
+              className="opacity-20"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="3"
+            />
+            <path
+              className="opacity-80"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+          </svg>
+          <p className="text-base font-medium text-gray-700">
+            AI가 사이트를 만들고 있습니다…
+          </p>
+          <p className="text-sm text-gray-400">잠시만 기다려 주세요.</p>
+        </div>
+      )}
       {/* 본문 */}
       <main className="mx-auto w-full max-w-[1200px] flex-1 px-6 py-12">
         <h1 className="text-2xl font-semibold text-black">사이트 만들기</h1>
@@ -650,6 +694,15 @@ export function CreateSiteForm() {
 
       {/* ── 하단 고정 버튼 ── */}
       <div className="sticky bottom-0 border-t border-gray-200 bg-white">
+        {submitError && (
+          <p
+            role="alert"
+            className="border-t border-gray-100 bg-gray-50 px-6 py-2
+              text-center text-sm text-red-600"
+          >
+            {submitError}
+          </p>
+        )}
         <div
           className="mx-auto flex w-full max-w-[1200px] items-center justify-end
             px-6 py-4"
@@ -861,13 +914,6 @@ function LinkIcon({ name, active }: { name: string; active: boolean }) {
   const fill = active ? "white" : "currentColor";
   const cls = "w-5 h-5";
 
-  if (name === "locationLink") {
-    return (
-      <svg className={cls} viewBox="0 0 24 24" fill={fill}>
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-      </svg>
-    );
-  }
   if (name === "blogLink") {
     return (
       <svg className={cls} viewBox="0 0 24 24" fill={fill}>
@@ -913,13 +959,6 @@ function LinkIcon({ name, active }: { name: string; active: boolean }) {
     return (
       <svg className={cls} viewBox="0 0 24 24" fill={fill}>
         <path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 001.46 6.42 29 29 0 001 12a29 29 0 00.46 5.58 2.78 2.78 0 001.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 001.95-1.96A29 29 0 0023 12a29 29 0 00-.46-5.58zM9.75 15.02V8.98L15.5 12l-5.75 3.02z" />
-      </svg>
-    );
-  }
-  if (name === "contactLink") {
-    return (
-      <svg className={cls} viewBox="0 0 24 24" fill={fill}>
-        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
       </svg>
     );
   }

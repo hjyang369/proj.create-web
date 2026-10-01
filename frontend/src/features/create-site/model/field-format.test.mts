@@ -115,8 +115,7 @@ describe("describeFieldFormat", () => {
 });
 
 describe("formatKindForLink", () => {
-  it("연락처 링크는 전화번호 형식이고 나머지는 주소 형식이다", () => {
-    assert.equal(formatKindForLink("contactLink"), "phone");
+  it("참고 사이트는 참고 주소 형식이고 그 외 링크는 사이트 주소 형식이다", () => {
     assert.equal(formatKindForLink("instagramLink"), "url");
     assert.equal(formatKindForLink("referenceLink"), "referenceUrl");
   });

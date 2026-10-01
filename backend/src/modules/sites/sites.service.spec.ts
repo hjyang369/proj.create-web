@@ -1,6 +1,7 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { SitesService } from "./sites.service.js";
-import type { StoredSite } from "./sites.store.js";
+import type { CreateSiteDto } from "./dto/create-site.dto.js";
+import type { CreateSiteRecord, StoredSite } from "./sites.store.js";
 
 const rows: StoredSite[] = [
   {
@@ -73,5 +74,46 @@ describe("SitesService.listMine", () => {
       UnauthorizedException,
     );
     expect(called).toBe(false);
+  });
+});
+
+const createDto = {
+  name: "카페",
+  tagline: "좋은 커피",
+  purpose: "company_intro",
+  industry: "",
+  description: "",
+  address: "",
+  phone: "",
+  email: "",
+  targetCustomer: "",
+  mainColor: "",
+  mood: "warm",
+  pageCount: 1,
+  selectedPages: [],
+  blogLink: "",
+  websiteLink: "",
+  instagramLink: "",
+  youtubeLink: "",
+  referenceLink: "",
+  extraRequest: "로고를 크게",
+} as CreateSiteDto;
+
+describe("SitesService.create", () => {
+  it("추가 요청을 저장 데이터에 넣는다", async () => {
+    let saved: CreateSiteRecord | undefined;
+    const service = new SitesService({
+      async listByUserId() {
+        return [];
+      },
+      async create(data) {
+        saved = data;
+        return { id: 1 };
+      },
+    });
+
+    await service.create(1, createDto, undefined, []);
+
+    expect(saved?.extraRequest).toBe("로고를 크게");
   });
 });

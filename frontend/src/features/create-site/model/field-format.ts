@@ -263,18 +263,12 @@ export function keepDigits(value: string): string {
 
 export function formatKindForLink(
   name:
-    | "locationLink"
     | "blogLink"
     | "websiteLink"
     | "instagramLink"
     | "youtubeLink"
-    | "contactLink"
     | "referenceLink",
 ): FieldFormatKind {
-  if (name === "contactLink") {
-    return "phone";
-  }
-
   if (name === "referenceLink") {
     return "referenceUrl";
   }

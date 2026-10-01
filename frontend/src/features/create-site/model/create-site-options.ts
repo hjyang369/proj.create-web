@@ -4,24 +4,18 @@ export type SelectOption = {
 };
 
 export type LinkField = {
-  name:
-    | "locationLink"
-    | "blogLink"
-    | "websiteLink"
-    | "instagramLink"
-    | "youtubeLink"
-    | "contactLink";
+  name: "blogLink" | "websiteLink" | "instagramLink" | "youtubeLink";
   label: string;
   placeholder: string;
 };
 
 /** 제작 목적 (6가지, 단일 선택 필수) */
 export const PURPOSE_OPTIONS: SelectOption[] = [
-  { value: "company-intro", label: "회사소개용" },
-  { value: "ir", label: "투자·IR용" },
+  { value: "company_intro", label: "회사소개용" },
+  { value: "investment", label: "투자·IR용" },
   { value: "sales", label: "고객 영업용" },
-  { value: "hiring", label: "채용 브랜딩용" },
-  { value: "service", label: "서비스 홍보용" },
+  { value: "recruitment", label: "채용 브랜딩용" },
+  { value: "promotion", label: "서비스 홍보용" },
   { value: "inquiry", label: "문의·상담 전환용" },
 ];
 
@@ -47,13 +41,8 @@ export const PAGE_OPTIONS: SelectOption[] = [
   { value: "review", label: "리뷰" },
 ];
 
-/** 링크 입력 (6가지) */
+/** 링크 입력 */
 export const LINK_FIELDS: LinkField[] = [
-  {
-    name: "locationLink",
-    label: "위치",
-    placeholder: "예: https://naver.me/xxxxx",
-  },
   {
     name: "blogLink",
     label: "블로그",
@@ -74,5 +63,4 @@ export const LINK_FIELDS: LinkField[] = [
     label: "유튜브",
     placeholder: "예: https://youtube.com/@xxx",
   },
-  { name: "contactLink", label: "연락처", placeholder: "예: 010-1234-5678" },
 ];
