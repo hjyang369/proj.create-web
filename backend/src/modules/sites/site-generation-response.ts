@@ -6,7 +6,7 @@ export type GeneratedSitePage = {
 };
 
 const DANGEROUS_HTML =
-  /<\s*(script|iframe|object|embed|style)\b|on[a-z]+\s*=|javascript\s*:/i;
+  /<\s*(script|iframe|object|embed|style)\b|\bon[a-z]+\s*=|javascript\s*:/i;
 
 export function parseSiteGenerationResponse(
   raw: string,

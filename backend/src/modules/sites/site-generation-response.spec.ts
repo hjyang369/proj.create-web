@@ -47,6 +47,20 @@ describe("parseSiteGenerationResponse", () => {
     ).toThrow("pageOrder");
   });
 
+  it("메타 태그의 content 속성은 허용한다", () => {
+    const html =
+      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="카페"></head><body><main><h1>카페</h1></main></body></html>';
+
+    const pages = parseSiteGenerationResponse(
+      JSON.stringify({
+        pages: [{ ...validPage, html }],
+      }),
+      1,
+    );
+
+    expect(pages[0]?.html).toBe(html);
+  });
+
   it("위험한 HTML이 있으면 거절한다", () => {
     expect(() =>
       parseSiteGenerationResponse(
@@ -55,6 +69,22 @@ describe("parseSiteGenerationResponse", () => {
             {
               ...validPage,
               html: '<main><script>alert(1)</script></main>',
+            },
+          ],
+        }),
+        1,
+      ),
+    ).toThrow("위험한");
+  });
+
+  it("인라인 이벤트 속성은 거절한다", () => {
+    expect(() =>
+      parseSiteGenerationResponse(
+        JSON.stringify({
+          pages: [
+            {
+              ...validPage,
+              html: '<main><img src="photo.jpg" onerror="alert(1)"></main>',
             },
           ],
         }),
