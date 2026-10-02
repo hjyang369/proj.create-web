@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
-import { createSite } from "@/shared/api";
+import { API_URL, createSite } from "@/shared/api";
 import type { ReactNode } from "react";
 import {
   PURPOSE_OPTIONS,
@@ -26,7 +26,6 @@ import {
   keepEmailChars,
   type FieldFormat,
 } from "../model/field-format";
-import { appendSelectedPhotos } from "../model/site-photos";
 
 type CreateSiteValues = {
   industry: string;
@@ -50,23 +49,138 @@ type CreateSiteValues = {
   extraRequest: string;
 };
 
+export type SiteFormImage = {
+  url: string;
+  originalName: string;
+};
+
+export type SiteFormSubmit = {
+  values: CreateSiteValues;
+  logoFile: File | null;
+  photoFiles: File[];
+  keepExistingLogo: boolean;
+  keptPhotoUrls: string[];
+};
+
+type CreateSiteFormProps = {
+  initialValues?: CreateSiteValues;
+  initialLogo?: SiteFormImage | null;
+  initialPhotos?: SiteFormImage[];
+  submitLabel?: string;
+  pendingLabel?: string;
+  pendingMessage?: string;
+  embedded?: boolean;
+  onSubmitForm?: (submit: SiteFormSubmit) => Promise<void>;
+};
+
+type PreviewPhoto = {
+  id: string;
+  src: string;
+  file: File | null;
+  existingUrl: string | null;
+};
+
+const emptyValues: CreateSiteValues = {
+  industry: "",
+  name: "",
+  tagline: "",
+  description: "",
+  address: "",
+  phone: "",
+  email: "",
+  purpose: "",
+  targetCustomer: "",
+  mainColor: "",
+  mood: "",
+  pageCount: "",
+  selectedPages: [],
+  blogLink: "",
+  websiteLink: "",
+  instagramLink: "",
+  youtubeLink: "",
+  referenceLink: "",
+  extraRequest: "",
+};
+
+function assetSrc(url: string): string {
+  if (url.startsWith("/uploads/")) {
+    return `${API_URL.replace(/\/$/, "")}${url}`;
+  }
+  return url;
+}
+
+function revokeBlob(url: string | null) {
+  if (url?.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+}
+
 const inputCls =
   "w-full h-11 px-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500";
 const textareaCls =
   "w-full px-3 py-2.5 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:border-gray-500 resize-none";
 
-export function CreateSiteForm() {
+export function CreateSiteForm({
+  initialValues,
+  initialLogo = null,
+  initialPhotos = [],
+  submitLabel = "생성하기",
+  pendingLabel = "생성 중...",
+  pendingMessage = "AI가 사이트를 만들고 있습니다…",
+  embedded = false,
+  onSubmitForm,
+}: CreateSiteFormProps = {}) {
   const router = useRouter();
+  const defaults: CreateSiteValues = initialValues
+    ? {
+        industry: initialValues.industry,
+        name: initialValues.name,
+        tagline: initialValues.tagline,
+        description: initialValues.description,
+        address: initialValues.address,
+        phone: initialValues.phone,
+        email: initialValues.email,
+        purpose: initialValues.purpose,
+        targetCustomer: initialValues.targetCustomer,
+        mainColor: initialValues.mainColor,
+        mood: initialValues.mood,
+        pageCount: initialValues.pageCount,
+        selectedPages: initialValues.selectedPages,
+        blogLink: initialValues.blogLink,
+        websiteLink: initialValues.websiteLink,
+        instagramLink: initialValues.instagramLink,
+        youtubeLink: initialValues.youtubeLink,
+        referenceLink: initialValues.referenceLink,
+        extraRequest: initialValues.extraRequest,
+      }
+    : emptyValues;
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPrevUrl, setLogoPrevUrl] = useState<string | null>(null);
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [photoPrevUrls, setPhotoPrevUrls] = useState<string[]>([]);
+  const [logoSrc, setLogoSrc] = useState<string | null>(
+    initialLogo ? assetSrc(initialLogo.url) : null,
+  );
+  const [keepExistingLogo, setKeepExistingLogo] = useState(initialLogo != null);
+  const [previewPhotos, setPreviewPhotos] = useState<PreviewPhoto[]>(() =>
+    initialPhotos.map((photo) => ({
+      id: photo.url,
+      src: assetSrc(photo.url),
+      file: null,
+      existingUrl: photo.url,
+    })),
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
 
-  const [expandedLinks, setExpandedLinks] = useState<Set<string>>(new Set());
+  const [expandedLinks, setExpandedLinks] = useState<Set<string>>(() => {
+    const open = new Set<string>();
+    for (const field of LINK_FIELDS) {
+      if (defaults[field.name].trim() !== "") {
+        open.add(field.name);
+      }
+    }
+    return open;
+  });
 
   const {
     register,
@@ -76,27 +190,7 @@ export function CreateSiteForm() {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateSiteValues>({
-    defaultValues: {
-      industry: "",
-      name: "",
-      tagline: "",
-      description: "",
-      address: "",
-      phone: "",
-      email: "",
-      purpose: "",
-      targetCustomer: "",
-      mainColor: "",
-      mood: "",
-      pageCount: "",
-      selectedPages: [],
-      blogLink: "",
-      websiteLink: "",
-      instagramLink: "",
-      youtubeLink: "",
-      referenceLink: "",
-      extraRequest: "",
-    },
+    defaultValues: defaults,
   });
 
   const values = watch();
@@ -120,7 +214,23 @@ export function CreateSiteForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null);
+    const photoFiles = previewPhotos.flatMap((photo) =>
+      photo.file ? [photo.file] : [],
+    );
+    const keptPhotoUrls = previewPhotos.flatMap((photo) =>
+      photo.existingUrl ? [photo.existingUrl] : [],
+    );
     try {
+      if (onSubmitForm) {
+        await onSubmitForm({
+          values,
+          logoFile,
+          photoFiles,
+          keepExistingLogo: keepExistingLogo && logoFile == null,
+          keptPhotoUrls,
+        });
+        return;
+      }
       const { id } = await createSite(values, logoFile, photoFiles);
       router.push(`/edit/${id}`);
     } catch (err) {
@@ -134,40 +244,45 @@ export function CreateSiteForm() {
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    if (logoPrevUrl) URL.revokeObjectURL(logoPrevUrl);
+    revokeBlob(logoSrc);
     if (file) {
       setLogoFile(file);
-      setLogoPrevUrl(URL.createObjectURL(file));
+      setLogoSrc(URL.createObjectURL(file));
+      setKeepExistingLogo(false);
     } else {
       setLogoFile(null);
-      setLogoPrevUrl(null);
+      setLogoSrc(null);
+      setKeepExistingLogo(false);
     }
   }
 
   function removeLogo() {
-    if (logoPrevUrl) URL.revokeObjectURL(logoPrevUrl);
+    revokeBlob(logoSrc);
     setLogoFile(null);
-    setLogoPrevUrl(null);
+    setLogoSrc(null);
+    setKeepExistingLogo(false);
     if (logoInputRef.current) logoInputRef.current.value = "";
   }
 
   function handlePhotosChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
-    setPhotoFiles((current) => appendSelectedPhotos(current, selected));
     if (selected.length === 0) return;
-    setPhotoPrevUrls((current) => [
+    setPreviewPhotos((current) => [
       ...current,
-      ...selected.map((file) => URL.createObjectURL(file)),
+      ...selected.map((file) => {
+        const src = URL.createObjectURL(file);
+        return { id: src, src, file, existingUrl: null };
+      }),
     ]);
     e.target.value = "";
   }
 
-  function removePhoto(index: number) {
-    URL.revokeObjectURL(photoPrevUrls[index]);
-    const newFiles = photoFiles.filter((_, i) => i !== index);
-    const newUrls = photoPrevUrls.filter((_, i) => i !== index);
-    setPhotoFiles(newFiles);
-    setPhotoPrevUrls(newUrls);
+  function removePhoto(id: string) {
+    setPreviewPhotos((current) => {
+      const target = current.find((photo) => photo.id === id);
+      revokeBlob(target?.src ?? null);
+      return current.filter((photo) => photo.id !== id);
+    });
     if (photosInputRef.current) photosInputRef.current.value = "";
   }
 
@@ -175,7 +290,11 @@ export function CreateSiteForm() {
     <form
       onSubmit={onSubmit}
       noValidate
-      className="flex min-h-[calc(100dvh-3.5rem)] flex-col"
+      className={
+        embedded
+          ? "flex min-h-0 flex-1 flex-col"
+          : "flex min-h-[calc(100dvh-3.5rem)] flex-col"
+      }
     >
       {/* ── 전체 화면 로딩 오버레이 ── */}
       {isSubmitting && (
@@ -205,19 +324,32 @@ export function CreateSiteForm() {
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <p className="text-base font-medium text-gray-700">
-            AI가 사이트를 만들고 있습니다…
-          </p>
+          <p className="text-base font-medium text-gray-700">{pendingMessage}</p>
           <p className="text-sm text-gray-400">잠시만 기다려 주세요.</p>
         </div>
       )}
       {/* 본문 */}
-      <main className="mx-auto w-full max-w-[1200px] flex-1 px-6 py-12">
-        <h1 className="text-2xl font-semibold text-black">사이트 만들기</h1>
-        <p className="mt-2 text-sm text-gray-500">
-          회사 정보를 입력하면 AI가 사이트를 만들어 드립니다.{" "}
-          <span className="text-gray-400">* 필수</span>
-        </p>
+      <main
+        className={
+          embedded
+            ? "mx-auto w-full max-w-[1200px] min-h-0 flex-1 overflow-y-auto px-6 py-6"
+            : "mx-auto w-full max-w-[1200px] flex-1 px-6 py-12"
+        }
+      >
+        {embedded ? (
+          <p className="text-sm text-gray-500">
+            내용을 고친 뒤 저장하면 사이트를 다시 만듭니다.{" "}
+            <span className="text-gray-400">* 필수</span>
+          </p>
+        ) : (
+          <>
+            <h1 className="text-2xl font-semibold text-black">사이트 만들기</h1>
+            <p className="mt-2 text-sm text-gray-500">
+              회사 정보를 입력하면 AI가 사이트를 만들어 드립니다.{" "}
+              <span className="text-gray-400">* 필수</span>
+            </p>
+          </>
+        )}
 
         {/* ── 기본 정보 ── */}
         <Section id="basics" title="기본 정보">
@@ -583,10 +715,10 @@ export function CreateSiteForm() {
               >
                 파일 선택
               </button>
-              {logoPrevUrl && (
+              {logoSrc && (
                 <div className="relative">
                   <img
-                    src={logoPrevUrl}
+                    src={logoSrc}
                     alt="로고 미리보기"
                     className="h-12 w-12 rounded-lg object-contain
                       border border-gray-200 bg-gray-50"
@@ -642,19 +774,19 @@ export function CreateSiteForm() {
               className="hidden"
               onChange={handlePhotosChange}
             />
-            {photoPrevUrls.length > 0 && (
+            {previewPhotos.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {photoPrevUrls.map((url, i) => (
-                  <div key={url} className="relative">
+                {previewPhotos.map((photo, i) => (
+                  <div key={photo.id} className="relative">
                     <img
-                      src={url}
+                      src={photo.src}
                       alt={`사진 ${i + 1}`}
                       className="h-20 w-20 rounded-lg object-cover
                         border border-gray-200"
                     />
                     <button
                       type="button"
-                      onClick={() => removePhoto(i)}
+                      onClick={() => removePhoto(photo.id)}
                       aria-label={`사진 ${i + 1} 삭제`}
                       className="absolute -right-1.5 -top-1.5
                         flex h-5 w-5 items-center justify-center
@@ -718,7 +850,7 @@ export function CreateSiteForm() {
               hover:bg-gray-900
               disabled:opacity-40"
           >
-            {isSubmitting ? "생성 중..." : "생성하기"}
+            {isSubmitting ? pendingLabel : submitLabel}
           </button>
         </div>
       </div>

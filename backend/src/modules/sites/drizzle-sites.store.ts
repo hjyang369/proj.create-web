@@ -9,7 +9,10 @@ import { siteInputs } from "../../database/schema/site-inputs.js";
 import { siteImages } from "../../database/schema/site-images.js";
 import { sitePages } from "../../database/schema/site-pages.js";
 import type { GeneratedSitePage } from "./site-generation-response.js";
-import { toCreateSiteRecord } from "./site-input-record.js";
+import {
+  toCreateSiteRecord,
+  type StoredGenerationInput,
+} from "./site-input-record.js";
 import { readStoredPageContent } from "./site-page-content.js";
 import type {
   CreateSiteRecord,
@@ -209,10 +212,10 @@ export class DrizzleSitesStore implements SitesStore {
     };
   }
 
-  async findOwnedGenerationInput(
+  private async loadOwnedInputRow(
     userId: number,
     siteId: number,
-  ): Promise<CreateSiteRecord | null> {
+  ): Promise<StoredGenerationInput | null> {
     const rows = await this.db
       .select({
         userId: sites.userId,
@@ -238,7 +241,142 @@ export class DrizzleSitesStore implements SitesStore {
       .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
       .limit(1);
 
-    const input = rows[0];
+    return rows[0] ?? null;
+  }
+
+  async findOwnedInputs(
+    userId: number,
+    siteId: number,
+  ): Promise<CreateSiteRecord | null> {
+    return this.findOwnedGenerationInput(userId, siteId);
+  }
+
+  async updateOwnedInputs(
+    userId: number,
+    siteId: number,
+    data: Omit<CreateSiteRecord, "userId" | "logo" | "photos">,
+  ): Promise<boolean> {
+    const now = new Date();
+
+    return this.db.transaction(async (tx) => {
+      const owned = await tx
+        .select({ id: sites.id })
+        .from(sites)
+        .innerJoin(siteInputs, eq(siteInputs.siteId, sites.id))
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+        .limit(1);
+
+      if (!owned[0]) {
+        return false;
+      }
+
+      await tx
+        .update(siteInputs)
+        .set({
+          businessType: data.businessType,
+          companyName: data.name,
+          oneLineIntro: data.oneLineIntro,
+          description: data.description,
+          address: data.address,
+          phone: data.phone,
+          email: data.email,
+          purpose: data.purpose,
+          targetCustomer: data.targetCustomer,
+          mainColor: data.mainColor,
+          atmosphere: data.atmosphere,
+          extraRequest: data.extraRequest,
+          pageCount: data.pageCount,
+          pageComponents: data.pageComponents,
+          referenceUrl: data.referenceUrl,
+          optionalLinks: data.optionalLinks,
+          updatedAt: now,
+        })
+        .where(eq(siteInputs.siteId, siteId));
+
+      await tx
+        .update(sites)
+        .set({
+          name: data.name,
+          updatedAt: now,
+        })
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)));
+
+      return true;
+    });
+  }
+
+  async replaceOwnedImages(
+    userId: number,
+    siteId: number,
+    images: {
+      logo: CreateSiteRecord["logo"];
+      photos: CreateSiteRecord["photos"];
+    },
+  ): Promise<boolean> {
+    const now = new Date();
+
+    return this.db.transaction(async (tx) => {
+      const owned = await tx
+        .select({ id: sites.id })
+        .from(sites)
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+        .limit(1);
+
+      if (!owned[0]) {
+        return false;
+      }
+
+      await tx.delete(siteImages).where(eq(siteImages.siteId, siteId));
+
+      const rows: Array<{
+        siteId: number;
+        type: "logo" | "site_image";
+        url: string;
+        originalName: string;
+        order: number;
+        createdAt: Date;
+      }> = [];
+
+      if (images.logo) {
+        rows.push({
+          siteId,
+          type: "logo",
+          url: images.logo.url,
+          originalName: images.logo.originalName,
+          order: 0,
+          createdAt: now,
+        });
+      }
+
+      images.photos.forEach((photo, index) => {
+        rows.push({
+          siteId,
+          type: "site_image",
+          url: photo.url,
+          originalName: photo.originalName,
+          order: index + 1,
+          createdAt: now,
+        });
+      });
+
+      if (rows.length > 0) {
+        await tx.insert(siteImages).values(rows);
+      }
+
+      await tx
+        .update(sites)
+        .set({ updatedAt: now })
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)));
+
+      return true;
+    });
+  }
+
+  async findOwnedGenerationInput(
+    userId: number,
+    siteId: number,
+  ): Promise<CreateSiteRecord | null> {
+    const input = await this.loadOwnedInputRow(userId, siteId);
     if (!input) {
       return null;
     }

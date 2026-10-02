@@ -4,10 +4,12 @@ import {
   describeFieldFormat,
   describeSafeExternalLink,
   describeSafeReferenceLink,
+  describeSiteInputIssue,
   escapeHtml,
   formatKindForLink,
   keepEmailChars,
   keepDigits,
+  type SiteInputFieldValues,
 } from "./field-format.ts";
 
 describe("describeFieldFormat", () => {
@@ -25,6 +27,12 @@ describe("describeFieldFormat", () => {
     assert.equal(describeFieldFormat("phone", "010-1234-5678").valid, true);
     assert.equal(describeFieldFormat("phone", "02-123-4567").valid, true);
     assert.equal(describeFieldFormat("phone", "031-1234-5678").valid, true);
+  });
+
+  it("국번이 네 자리인 연락처도 받는다", () => {
+    assert.equal(describeFieldFormat("phone", "070-0000-0000").valid, true);
+    assert.equal(describeFieldFormat("phone", "0507-0000-0000").valid, true);
+    assert.equal(describeFieldFormat("phone", "0502-1234-5678").valid, true);
   });
 
   it("연락처 형식이 아니면 안내한다", () => {
@@ -169,6 +177,70 @@ describe("escapeHtml", () => {
     assert.equal(
       escapeHtml(`<a href="javascript:alert(1)">클릭</a>`),
       "&lt;a href=&quot;javascript:alert(1)&quot;&gt;클릭&lt;/a&gt;",
+    );
+  });
+});
+
+const allowed = {
+  purposes: ["company_intro", "sales"],
+  moods: ["warm", "professional"],
+};
+
+function inputValues(
+  overrides: Partial<SiteInputFieldValues> = {},
+): SiteInputFieldValues {
+  return {
+    industry: "카페",
+    name: "아침커피",
+    tagline: "좋은 커피",
+    description: "",
+    address: "",
+    phone: "",
+    email: "",
+    purpose: "company_intro",
+    targetCustomer: "",
+    mainColor: "",
+    mood: "warm",
+    pageCount: "1",
+    selectedPages: [],
+    blogLink: "",
+    websiteLink: "",
+    instagramLink: "",
+    youtubeLink: "",
+    referenceLink: "",
+    extraRequest: "",
+    ...overrides,
+  };
+}
+
+describe("describeSiteInputIssue", () => {
+  it("필수값과 형식이 맞으면 저장할 수 있다", () => {
+    assert.equal(describeSiteInputIssue(inputValues(), allowed), null);
+  });
+
+  it("회사명, 한줄 소개, 제작 목적이 없으면 저장하지 않는다", () => {
+    assert.equal(
+      describeSiteInputIssue(inputValues({ name: "  " }), allowed),
+      "회사명을 입력해 주세요.",
+    );
+    assert.equal(
+      describeSiteInputIssue(inputValues({ tagline: "" }), allowed),
+      "한줄 소개를 입력해 주세요.",
+    );
+    assert.equal(
+      describeSiteInputIssue(inputValues({ purpose: "" }), allowed),
+      "제작 목적을 선택해 주세요.",
+    );
+  });
+
+  it("연락처와 페이지 수가 형식에 맞지 않으면 안내한다", () => {
+    assert.equal(
+      describeSiteInputIssue(inputValues({ phone: "전화" }), allowed),
+      "010-1234-5678 형식으로 입력해 주세요.",
+    );
+    assert.equal(
+      describeSiteInputIssue(inputValues({ pageCount: "0" }), allowed),
+      "페이지 수는 1 이상의 숫자로 입력해 주세요.",
     );
   });
 });

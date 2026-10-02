@@ -6,13 +6,17 @@ import {
   buildSitePreviewDocument,
   getMySite,
   regenerateSiteDraft,
+  updateSiteImages,
+  updateSiteInputs,
   type SiteEditorDetail,
 } from "@/entities/site";
+import { CreateSiteForm, type SiteFormSubmit } from "@/features/create-site";
 import { API_URL } from "@/shared/api";
 import {
   describeEditPageChrome,
   initialSidebarOpen,
 } from "../model/edit-page-layout";
+import { shouldReplaceSiteImages } from "../model/should-replace-site-images";
 
 type PreviewState =
   | { kind: "loading" }
@@ -119,6 +123,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ kind: "loading" });
   const [regenerating, setRegenerating] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -168,8 +173,17 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     };
   }, [ready, user, siteId]);
 
-  async function regenerateDraft() {
-    if (preview.kind !== "ready" || regenerating) {
+  function openRegenerateForm() {
+    if (preview.kind !== "ready" || regenerating || !preview.site.inputs) {
+      return;
+    }
+
+    setRegenerateError(null);
+    setFormOpen(true);
+  }
+
+  async function submitRegenerateForm(submission: SiteFormSubmit) {
+    if (preview.kind !== "ready" || !preview.site.inputs || regenerating) {
       return;
     }
 
@@ -178,17 +192,36 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       return;
     }
 
-    const confirmed = window.confirm(chrome.regenerate.confirmMessage);
-    if (!confirmed) {
-      return;
-    }
-
+    const inputs = preview.site.inputs;
     setRegenerating(true);
     setRegenerateError(null);
 
     try {
+      await updateSiteInputs(id, submission.values);
+      if (
+        shouldReplaceSiteImages(
+          {
+            logoUrl: inputs.logo?.url ?? null,
+            photoUrls: inputs.photos.map((photo) => photo.url),
+          },
+          {
+            hasNewLogo: submission.logoFile != null,
+            keepExistingLogo: submission.keepExistingLogo,
+            newPhotoCount: submission.photoFiles.length,
+            keptPhotoUrls: submission.keptPhotoUrls,
+          },
+        )
+      ) {
+        await updateSiteImages(id, {
+          keepExistingLogo: submission.keepExistingLogo,
+          keptPhotoUrls: submission.keptPhotoUrls,
+          logoFile: submission.logoFile,
+          photoFiles: submission.photoFiles,
+        });
+      }
       const site = await regenerateSiteDraft(id);
       setPreview({ kind: "ready", site });
+      setFormOpen(false);
     } catch (error: unknown) {
       const message =
         error instanceof Error
@@ -283,11 +316,13 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
             <div className="border-b border-gray-200 px-4 py-4">
               <button
                 type="button"
-                disabled={preview.kind !== "ready" || regenerating}
+                disabled={
+                  preview.kind !== "ready" ||
+                  !preview.site.inputs ||
+                  regenerating
+                }
                 className={regenerateButtonClassName}
-                onClick={() => {
-                  void regenerateDraft();
-                }}
+                onClick={openRegenerateForm}
               >
                 {regenerating
                   ? chrome.regenerate.pendingLabel
@@ -305,6 +340,49 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       ) : (
         <div className="absolute top-4 right-4">{sidebarToggle}</div>
       )}
+      {formOpen && preview.kind === "ready" && preview.site.inputs ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="regenerate-inputs-title"
+            className="flex h-dvh w-full max-w-5xl flex-col bg-white sm:h-[min(90dvh,920px)] sm:rounded-xl"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-6 py-4">
+              <h2
+                id="regenerate-inputs-title"
+                className="text-base font-medium text-black"
+              >
+                {chrome.regenerate.modalTitle}
+              </h2>
+              <button
+                type="button"
+                disabled={regenerating}
+                className="h-10 px-3 text-sm text-gray-800 rounded-lg hover:bg-gray-100 disabled:text-gray-400"
+                onClick={() => setFormOpen(false)}
+              >
+                {chrome.regenerate.closeLabel}
+              </button>
+            </div>
+            {regenerateError ? (
+              <p role="alert" className="px-6 pt-4 text-sm text-gray-800">
+                {regenerateError}
+              </p>
+            ) : null}
+            <CreateSiteForm
+              key={preview.site.id}
+              embedded
+              initialValues={preview.site.inputs}
+              initialLogo={preview.site.inputs.logo}
+              initialPhotos={preview.site.inputs.photos}
+              submitLabel={chrome.regenerate.submitLabel}
+              pendingLabel={chrome.regenerate.pendingLabel}
+              pendingMessage={chrome.regenerate.pendingMessage}
+              onSubmitForm={submitRegenerateForm}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

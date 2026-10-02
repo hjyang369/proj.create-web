@@ -93,6 +93,94 @@ function fileNameFromUrl(url: string): string {
   return name || "image";
 }
 
+export type SiteInputForm = {
+  industry: string;
+  name: string;
+  tagline: string;
+  description: string;
+  address: string;
+  phone: string;
+  email: string;
+  purpose: CreateSiteRecord["purpose"];
+  targetCustomer: string;
+  mainColor: string;
+  mood: string;
+  pageCount: string;
+  selectedPages: string[];
+  blogLink: string;
+  websiteLink: string;
+  instagramLink: string;
+  youtubeLink: string;
+  referenceLink: string;
+  extraRequest: string;
+  logo: { url: string; originalName: string } | null;
+  photos: Array<{ url: string; originalName: string }>;
+};
+
+function textOrEmpty(value: string | null): string {
+  return value ?? "";
+}
+
+function linkOrEmpty(
+  links: Record<string, string> | null,
+  key: string,
+): string {
+  return links?.[key] ?? "";
+}
+
+/** 저장된 생성 입력을 편집 화면 폼이 쓰는 필드로 되돌린다. */
+export function toSiteInputForm(record: CreateSiteRecord): SiteInputForm {
+  return {
+    industry: textOrEmpty(record.businessType),
+    name: record.name,
+    tagline: record.oneLineIntro,
+    description: textOrEmpty(record.description),
+    address: textOrEmpty(record.address),
+    phone: textOrEmpty(record.phone),
+    email: textOrEmpty(record.email),
+    purpose: record.purpose,
+    targetCustomer: textOrEmpty(record.targetCustomer),
+    mainColor: textOrEmpty(record.mainColor),
+    mood: textOrEmpty(record.atmosphere),
+    pageCount: String(record.pageCount),
+    selectedPages: record.pageComponents ?? [],
+    blogLink: linkOrEmpty(record.optionalLinks, "naver_blog"),
+    websiteLink: linkOrEmpty(record.optionalLinks, "homepage"),
+    instagramLink: linkOrEmpty(record.optionalLinks, "instagram"),
+    youtubeLink: linkOrEmpty(record.optionalLinks, "youtube"),
+    referenceLink: textOrEmpty(record.referenceUrl),
+    extraRequest: textOrEmpty(record.extraRequest),
+    logo: record.logo,
+    photos: record.photos,
+  };
+}
+
+type StoredSiteImageFile = { url: string; originalName: string };
+
+/** 기존 이미지 중 남길 것과 새로 올린 파일을 합친다. */
+export function planSiteImages(
+  current: {
+    logo: StoredSiteImageFile | null;
+    photos: StoredSiteImageFile[];
+  },
+  change: {
+    keepExistingLogo: boolean;
+    keptPhotoUrls: string[];
+    logo: StoredSiteImageFile | null;
+    photos: StoredSiteImageFile[];
+  },
+): { logo: StoredSiteImageFile | null; photos: StoredSiteImageFile[] } {
+  const kept = new Set(change.keptPhotoUrls);
+
+  return {
+    logo: change.logo ?? (change.keepExistingLogo ? current.logo : null),
+    photos: [
+      ...current.photos.filter((photo) => kept.has(photo.url)),
+      ...change.photos,
+    ],
+  };
+}
+
 export function toCreateSiteRecord(
   input: StoredGenerationInput,
   images: StoredGenerationImage[],

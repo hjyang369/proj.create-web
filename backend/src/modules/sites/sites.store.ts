@@ -76,6 +76,23 @@ export type SitesStore = {
     userId: number,
     siteId: number,
   ) => Promise<CreateSiteRecord | null>;
+  findOwnedInputs: (
+    userId: number,
+    siteId: number,
+  ) => Promise<CreateSiteRecord | null>;
+  updateOwnedInputs: (
+    userId: number,
+    siteId: number,
+    data: Omit<CreateSiteRecord, "userId" | "logo" | "photos">,
+  ) => Promise<boolean>;
+  replaceOwnedImages: (
+    userId: number,
+    siteId: number,
+    images: {
+      logo: CreateSiteRecord["logo"];
+      photos: CreateSiteRecord["photos"];
+    },
+  ) => Promise<boolean>;
   replaceGeneratedPages: (
     siteId: number,
     pages: GeneratedSitePage[],

@@ -17,6 +17,11 @@ import {
 } from "./sites.store.js";
 import type { CreateSiteDto } from "./dto/create-site.dto.js";
 import {
+  planSiteImages,
+  toSiteInputForm,
+  type SiteInputForm,
+} from "./site-input-record.js";
+import {
   SITE_GENERATOR,
   type SiteGenerator,
 } from "./site-generator.js";
@@ -34,7 +39,38 @@ export type SiteEditorDetail = {
   id: number;
   name: string;
   pages: StoredSitePageContent[];
+  inputs: SiteInputForm | null;
 };
+
+type SiteInputUpdate = Omit<CreateSiteRecord, "userId" | "logo" | "photos">;
+
+function toInputFields(dto: CreateSiteDto): SiteInputUpdate {
+  const optionalLinks: Record<string, string> = {};
+  if (dto.blogLink) optionalLinks.naver_blog = dto.blogLink;
+  if (dto.websiteLink) optionalLinks.homepage = dto.websiteLink;
+  if (dto.instagramLink) optionalLinks.instagram = dto.instagramLink;
+  if (dto.youtubeLink) optionalLinks.youtube = dto.youtubeLink;
+
+  return {
+    name: dto.name,
+    businessType: dto.industry || null,
+    oneLineIntro: dto.tagline,
+    description: dto.description || null,
+    address: dto.address || null,
+    phone: dto.phone || null,
+    email: dto.email || null,
+    purpose: dto.purpose,
+    targetCustomer: dto.targetCustomer || null,
+    mainColor: dto.mainColor || null,
+    atmosphere: dto.mood || null,
+    extraRequest: dto.extraRequest || null,
+    pageCount: dto.pageCount,
+    pageComponents: dto.selectedPages.length > 0 ? dto.selectedPages : null,
+    referenceUrl: dto.referenceLink || null,
+    optionalLinks:
+      Object.keys(optionalLinks).length > 0 ? optionalLinks : null,
+  };
+}
 
 function toListItem(site: StoredSite): SiteListItem {
   return {
@@ -99,7 +135,10 @@ export class SitesService {
       throw new NotFoundException("사이트를 찾을 수 없습니다.");
     }
 
-    const site = await this.sites.findOwnedWithPages(userId, siteId);
+    const [site, input] = await Promise.all([
+      this.sites.findOwnedWithPages(userId, siteId),
+      this.sites.findOwnedInputs(userId, siteId),
+    ]);
     if (!site || site.userId !== userId) {
       throw new NotFoundException("사이트를 찾을 수 없습니다.");
     }
@@ -110,7 +149,78 @@ export class SitesService {
       pages: [...site.pages].sort(
         (left, right) => left.pageOrder - right.pageOrder,
       ),
+      inputs: input && input.userId === userId ? toSiteInputForm(input) : null,
     };
+  }
+
+  async updateInputs(
+    userId: number,
+    siteId: number,
+    dto: CreateSiteDto,
+  ): Promise<SiteInputForm> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
+    }
+
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const fields = toInputFields(dto);
+    const updated = await this.sites.updateOwnedInputs(userId, siteId, fields);
+    if (!updated) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    return toSiteInputForm({
+      userId,
+      ...fields,
+      logo: null,
+      photos: [],
+    });
+  }
+
+  async updateImages(
+    userId: number,
+    siteId: number,
+    change: {
+      keepExistingLogo: boolean;
+      keptPhotoUrls: string[];
+      logoFile: Express.Multer.File | undefined;
+      photoFiles: Express.Multer.File[];
+    },
+  ): Promise<void> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
+    }
+
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const current = await this.sites.findOwnedGenerationInput(userId, siteId);
+    if (!current || current.userId !== userId) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const logo = change.logoFile
+      ? await saveFile(change.logoFile, "logos")
+      : null;
+    const photos: Array<{ url: string; originalName: string }> = [];
+    for (const file of change.photoFiles) {
+      photos.push(await saveFile(file, "photos"));
+    }
+
+    const next = planSiteImages(current, {
+      keepExistingLogo: change.keepExistingLogo,
+      keptPhotoUrls: change.keptPhotoUrls,
+      logo,
+      photos,
+    });
+    const replaced = await this.sites.replaceOwnedImages(userId, siteId, next);
+    if (!replaced) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
   }
 
   async create(
@@ -131,31 +241,9 @@ export class SitesService {
       photoResults.push(await saveFile(file, "photos"));
     }
 
-    const optionalLinks: Record<string, string> = {};
-    if (dto.blogLink) optionalLinks.naver_blog = dto.blogLink;
-    if (dto.websiteLink) optionalLinks.homepage = dto.websiteLink;
-    if (dto.instagramLink) optionalLinks.instagram = dto.instagramLink;
-    if (dto.youtubeLink) optionalLinks.youtube = dto.youtubeLink;
-
     const record: CreateSiteRecord = {
       userId,
-      name: dto.name,
-      businessType: dto.industry || null,
-      oneLineIntro: dto.tagline,
-      description: dto.description || null,
-      address: dto.address || null,
-      phone: dto.phone || null,
-      email: dto.email || null,
-      purpose: dto.purpose,
-      targetCustomer: dto.targetCustomer || null,
-      mainColor: dto.mainColor || null,
-      atmosphere: dto.mood || null,
-      extraRequest: dto.extraRequest || null,
-      pageCount: dto.pageCount,
-      pageComponents: dto.selectedPages.length > 0 ? dto.selectedPages : null,
-      referenceUrl: dto.referenceLink || null,
-      optionalLinks:
-        Object.keys(optionalLinks).length > 0 ? optionalLinks : null,
+      ...toInputFields(dto),
       logo: logoResult,
       photos: photoResults,
     };
@@ -210,6 +298,7 @@ export class SitesService {
       id: siteId,
       name: record.name,
       pages: [...pages].sort((left, right) => left.pageOrder - right.pageOrder),
+      inputs: toSiteInputForm(record),
     };
   }
 }

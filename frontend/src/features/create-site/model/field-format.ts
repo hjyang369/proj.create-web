@@ -31,7 +31,7 @@ const blockedReferenceMessage =
   "이 주소는 참고 사이트로 사용할 수 없습니다. 공개 웹사이트 주소만 입력해 주세요.";
 
 const patterns = {
-  phone: /^(0\d{1,2}-\d{3,4}-\d{4}|1\d{3}-\d{4})$/,
+  phone: /^(0\d{1,3}-\d{3,4}-\d{4}|1\d{3}-\d{4})$/,
   email: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
   pageCount: /^\d+$/,
 } as const;
@@ -259,6 +259,130 @@ export function keepEmailChars(value: string): string {
 
 export function keepDigits(value: string): string {
   return value.replace(/\D/g, "");
+}
+
+export type SiteInputFieldValues = {
+  industry: string;
+  name: string;
+  tagline: string;
+  description: string;
+  address: string;
+  phone: string;
+  email: string;
+  purpose: string;
+  targetCustomer: string;
+  mainColor: string;
+  mood: string;
+  pageCount: string;
+  selectedPages: string[];
+  blogLink: string;
+  websiteLink: string;
+  instagramLink: string;
+  youtubeLink: string;
+  referenceLink: string;
+  extraRequest: string;
+};
+
+const fieldLimits = {
+  industry: 255,
+  name: 255,
+  tagline: 500,
+  address: 500,
+  phone: 50,
+  email: 255,
+  targetCustomer: 500,
+  mainColor: 100,
+  blogLink: 500,
+  websiteLink: 500,
+  instagramLink: 500,
+  youtubeLink: 500,
+  referenceLink: 500,
+} as const;
+
+const fieldLabels: Record<keyof typeof fieldLimits, string> = {
+  industry: "업종",
+  name: "회사명",
+  tagline: "한줄 소개",
+  address: "주소",
+  phone: "연락처",
+  email: "이메일",
+  targetCustomer: "타겟 고객",
+  mainColor: "메인 컬러",
+  blogLink: "블로그",
+  websiteLink: "홈페이지",
+  instagramLink: "인스타그램",
+  youtubeLink: "유튜브",
+  referenceLink: "참고 사이트",
+};
+
+const linkFields = [
+  "blogLink",
+  "websiteLink",
+  "instagramLink",
+  "youtubeLink",
+] as const;
+
+/** 저장 전에 고칠 내용이 있으면 그 안내 문장을 돌려준다. */
+export function describeSiteInputIssue(
+  values: SiteInputFieldValues,
+  allowed: { purposes: readonly string[]; moods: readonly string[] },
+): string | null {
+  if (values.name.trim() === "") {
+    return "회사명을 입력해 주세요.";
+  }
+
+  if (values.tagline.trim() === "") {
+    return "한줄 소개를 입력해 주세요.";
+  }
+
+  if (values.purpose.trim() === "") {
+    return "제작 목적을 선택해 주세요.";
+  }
+
+  if (!allowed.purposes.includes(values.purpose)) {
+    return "올바른 제작 목적을 선택해 주세요.";
+  }
+
+  if (values.mood.trim() !== "" && !allowed.moods.includes(values.mood)) {
+    return "올바른 분위기를 선택해 주세요.";
+  }
+
+  for (const [key, max] of Object.entries(fieldLimits) as Array<
+    [keyof typeof fieldLimits, number]
+  >) {
+    if (values[key].length > max) {
+      return `${fieldLabels[key]}: ${max}자까지 입력해 주세요.`;
+    }
+  }
+
+  const phone = describeFieldFormat("phone", values.phone);
+  if (!phone.valid) {
+    return phone.message;
+  }
+
+  const email = describeFieldFormat("email", values.email);
+  if (!email.valid) {
+    return email.message;
+  }
+
+  const pageCount = values.pageCount.trim();
+  if (pageCount === "" || !/^\d+$/.test(pageCount) || Number(pageCount) < 1) {
+    return "페이지 수는 1 이상의 숫자로 입력해 주세요.";
+  }
+
+  for (const name of linkFields) {
+    const format = describeFieldFormat("url", values[name]);
+    if (!format.valid) {
+      return format.message;
+    }
+  }
+
+  const reference = describeFieldFormat("referenceUrl", values.referenceLink);
+  if (!reference.valid) {
+    return reference.message;
+  }
+
+  return null;
 }
 
 export function formatKindForLink(

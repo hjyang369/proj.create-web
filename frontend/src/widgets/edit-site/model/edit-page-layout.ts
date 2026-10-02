@@ -10,7 +10,10 @@ export type EditPageChrome = {
   regenerate: {
     label: "초안으로 재생성";
     pendingLabel: "다시 만드는 중...";
-    confirmMessage: string;
+    pendingMessage: string;
+    modalTitle: string;
+    closeLabel: string;
+    submitLabel: string;
   };
   sidebar: {
     title: string;
@@ -33,8 +36,10 @@ export function describeEditPageChrome(): EditPageChrome {
     regenerate: {
       label: "초안으로 재생성",
       pendingLabel: "다시 만드는 중...",
-      confirmMessage:
-        "지금 보이는 초안을 지우고, 처음 입력한 내용으로 사이트를 다시 만들까요?",
+      pendingMessage: "사이트를 다시 만들고 있습니다…",
+      modalTitle: "입력 내용을 고치고 다시 만들기",
+      closeLabel: "닫기",
+      submitLabel: "저장하고 다시 만들기",
     },
     sidebar: {
       title: "편집",

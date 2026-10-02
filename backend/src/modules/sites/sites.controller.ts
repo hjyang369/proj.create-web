@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Req,
   UploadedFiles,
@@ -16,6 +17,7 @@ import type { AuthUser } from "../auth/auth-user.js";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { SitesService } from "./sites.service.js";
 import { CreateSiteDto } from "./dto/create-site.dto.js";
+import { UpdateSiteImagesDto } from "./dto/update-site-images.dto.js";
 
 const multerOptions = {
   storage: memoryStorage(), // 파일을 메모리에 올려 서비스에서 직접 저장
@@ -42,6 +44,45 @@ export class SitesController {
     @Param("id", ParseIntPipe) id: number,
   ) {
     return this.sitesService.getMine(request.user.id, id);
+  }
+
+  @Patch(":id/images")
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: "logo", maxCount: 1 },
+        { name: "photos", maxCount: 20 },
+      ],
+      multerOptions,
+    ),
+  )
+  updateImages(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: UpdateSiteImagesDto,
+    @UploadedFiles()
+    files?: {
+      logo?: Express.Multer.File[];
+      photos?: Express.Multer.File[];
+    },
+  ) {
+    return this.sitesService.updateImages(request.user.id, id, {
+      keepExistingLogo: dto.keepExistingLogo,
+      keptPhotoUrls: dto.keptPhotoUrls ?? [],
+      logoFile: files?.logo?.[0],
+      photoFiles: files?.photos ?? [],
+    });
+  }
+
+  @Patch(":id/inputs")
+  @UseGuards(JwtAuthGuard)
+  updateInputs(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: CreateSiteDto,
+  ) {
+    return this.sitesService.updateInputs(request.user.id, id, dto);
   }
 
   @Post(":id/regenerate")

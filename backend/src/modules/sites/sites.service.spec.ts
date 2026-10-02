@@ -3,6 +3,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { toSiteInputForm } from './site-input-record.js';
 import { SitesService } from './sites.service.js';
 import type { CreateSiteDto } from './dto/create-site.dto.js';
 import type { GeneratedSitePage } from './site-generation-response.js';
@@ -255,6 +256,9 @@ describe('SitesService.getMine', () => {
             ],
           };
         },
+        async findOwnedInputs() {
+          return null;
+        },
       } as SitesStore,
       unusedGenerator,
     );
@@ -262,6 +266,7 @@ describe('SitesService.getMine', () => {
     await expect(service.getMine(1, 1)).resolves.toEqual({
       id: 1,
       name: '카페',
+      inputs: null,
       pages: [
         {
           pageType: 'company_intro',
@@ -279,11 +284,40 @@ describe('SitesService.getMine', () => {
     });
   });
 
+  it('저장된 입력을 편집 폼 값으로 함께 돌려준다', async () => {
+    const service = new SitesService(
+      {
+        async findOwnedWithPages() {
+          return {
+            id: 4,
+            userId: 1,
+            name: '카페',
+            pages: [],
+          };
+        },
+        async findOwnedInputs() {
+          return storedGenerationInput;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.getMine(1, 4)).resolves.toEqual({
+      id: 4,
+      name: '카페',
+      pages: [],
+      inputs: toSiteInputForm(storedGenerationInput),
+    });
+  });
+
   it('다른 사람 사이트나 없는 사이트는 찾지 못했다고 알린다', async () => {
     const service = new SitesService(
       {
         async findOwnedWithPages() {
           return null;
+        },
+        async findOwnedInputs() {
+          return storedGenerationInput;
         },
       } as SitesStore,
       unusedGenerator,
@@ -359,6 +393,7 @@ describe('SitesService.regenerateDraft', () => {
     await expect(service.regenerateDraft(1, 4)).resolves.toEqual({
       id: 4,
       name: '카페',
+      inputs: toSiteInputForm(storedGenerationInput),
       pages: [
         {
           pageType: 'company_intro',
@@ -436,5 +471,182 @@ describe('SitesService.regenerateDraft', () => {
       UnauthorizedException,
     );
     expect(called).toBe(false);
+  });
+});
+
+describe('SitesService.updateInputs', () => {
+  it('내 사이트 입력을 고치고 편집 폼 값으로 돌려준다', async () => {
+    let saved:
+      | {
+          userId: number;
+          siteId: number;
+          data: Omit<CreateSiteRecord, 'userId' | 'logo' | 'photos'>;
+        }
+      | undefined;
+    const service = new SitesService(
+      {
+        async updateOwnedInputs(userId, siteId, data) {
+          saved = { userId, siteId, data };
+          return true;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(
+      service.updateInputs(1, 4, {
+        ...createDto,
+        name: '저녁커피',
+        tagline: '밤에 마시는 커피',
+        industry: '카페',
+        blogLink: 'https://blog.naver.com/cafe',
+      }),
+    ).resolves.toEqual({
+      industry: '카페',
+      name: '저녁커피',
+      tagline: '밤에 마시는 커피',
+      description: '',
+      address: '',
+      phone: '',
+      email: '',
+      purpose: 'company_intro',
+      targetCustomer: '',
+      mainColor: '',
+      mood: 'warm',
+      pageCount: '1',
+      selectedPages: [],
+      blogLink: 'https://blog.naver.com/cafe',
+      websiteLink: '',
+      instagramLink: '',
+      youtubeLink: '',
+      referenceLink: '',
+      extraRequest: '로고를 크게',
+      logo: null,
+      photos: [],
+    });
+    expect(saved).toEqual({
+      userId: 1,
+      siteId: 4,
+      data: {
+        name: '저녁커피',
+        businessType: '카페',
+        oneLineIntro: '밤에 마시는 커피',
+        description: null,
+        address: null,
+        phone: null,
+        email: null,
+        purpose: 'company_intro',
+        targetCustomer: null,
+        mainColor: null,
+        atmosphere: 'warm',
+        extraRequest: '로고를 크게',
+        pageCount: 1,
+        pageComponents: null,
+        referenceUrl: null,
+        optionalLinks: { naver_blog: 'https://blog.naver.com/cafe' },
+      },
+    });
+  });
+
+  it('다른 사람 사이트 입력은 고치지 않는다', async () => {
+    const service = new SitesService(
+      {
+        async updateOwnedInputs() {
+          return false;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.updateInputs(1, 4, createDto)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('사용자 번호가 없으면 저장하지 않는다', async () => {
+    let called = false;
+    const service = new SitesService(
+      {
+        async updateOwnedInputs() {
+          called = true;
+          return true;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.updateInputs(0, 4, createDto)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(called).toBe(false);
+  });
+});
+
+describe('SitesService.updateImages', () => {
+  it('남긴 기존 이미지를 저장한다', async () => {
+    let replaced:
+      | {
+          userId: number;
+          siteId: number;
+          images: {
+            logo: CreateSiteRecord['logo'];
+            photos: CreateSiteRecord['photos'];
+          };
+        }
+      | undefined;
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          return storedGenerationInput;
+        },
+        async replaceOwnedImages(userId, siteId, images) {
+          replaced = { userId, siteId, images };
+          return true;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await service.updateImages(1, 4, {
+      keepExistingLogo: true,
+      keptPhotoUrls: [],
+      logoFile: undefined,
+      photoFiles: [],
+    });
+
+    expect(replaced).toEqual({
+      userId: 1,
+      siteId: 4,
+      images: {
+        logo: storedGenerationInput.logo,
+        photos: [],
+      },
+    });
+  });
+
+  it('다른 사람 사이트 이미지는 바꾸지 않는다', async () => {
+    let replaced = false;
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceOwnedImages() {
+          replaced = true;
+          return true;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(
+      service.updateImages(1, 4, {
+        keepExistingLogo: false,
+        keptPhotoUrls: [],
+        logoFile: undefined,
+        photoFiles: [],
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(replaced).toBe(false);
   });
 });
