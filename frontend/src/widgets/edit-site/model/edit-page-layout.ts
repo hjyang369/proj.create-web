@@ -21,6 +21,13 @@ export type EditPageChrome = {
     collapseLabel: string;
     expandLabel: string;
   };
+  mode: {
+    groupLabel: string;
+    editLabel: string;
+    editHint: string;
+    previewHint: string;
+    previewMessage: string;
+  };
 };
 
 export function describeEditPageChrome(): EditPageChrome {
@@ -47,6 +54,14 @@ export function describeEditPageChrome(): EditPageChrome {
         "요소를 고르면 여기에서 편집합니다. \n 좌측 마우스 클릭으로 요소 선택, 우측 마우스 클릭으로 요소 개별 편집",
       collapseLabel: "사이드바 접기",
       expandLabel: "사이드바 펼치기",
+    },
+    mode: {
+      groupLabel: "편집 모드",
+      editLabel: "편집",
+      editHint: "클릭한 요소를 고릅니다.",
+      previewHint: "버튼과 링크가 그대로 동작합니다.",
+      previewMessage:
+        "편집이 꺼져 있습니다. 버튼과 링크를 누르면 그대로 동작합니다.",
     },
   };
 }

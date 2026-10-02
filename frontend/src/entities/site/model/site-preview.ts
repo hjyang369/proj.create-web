@@ -65,9 +65,21 @@ ${html}
 const CLICK_DETECTOR_SCRIPT = [
   "<script>",
   "(function(){",
+  "var editing=true;",
+  "document.documentElement.classList.add('crep-editing');",
   "var style=document.createElement('style');",
-  "style.textContent='[data-crep-s] .crep-sel{outline:2px solid rgba(0,0,0,0.6);outline-offset:1px;cursor:pointer}[data-crep-s] *:hover{outline:1px dashed rgba(0,0,0,0.25);outline-offset:1px;cursor:pointer}';",
+  "style.textContent='html.crep-editing [data-crep-s] .crep-sel{outline:2px solid rgba(0,0,0,0.6);outline-offset:1px;cursor:pointer}html.crep-editing [data-crep-s] *:hover{outline:1px dashed rgba(0,0,0,0.25);outline-offset:1px;cursor:pointer}';",
   "document.head.appendChild(style);",
+  "window.addEventListener('message',function(event){",
+  "if(event.source!==window.parent) return;",
+  "var data=event.data;",
+  "if(!data||data.type!=='crep-set-mode') return;",
+  "editing=!!data.editing;",
+  "if(editing){document.documentElement.classList.add('crep-editing');return;}",
+  "document.documentElement.classList.remove('crep-editing');",
+  "var marked=document.querySelector('.crep-sel');",
+  "if(marked) marked.classList.remove('crep-sel');",
+  "});",
   // 각 페이지 래퍼의 자식 섹션에 인덱스 속성 부여
   "var pages=document.querySelectorAll('[data-crep-page]');",
   "for(var p=0;p<pages.length;p++){",
@@ -76,7 +88,8 @@ const CLICK_DETECTOR_SCRIPT = [
   "sections[i].setAttribute('data-crep-s',String(i));",
   "sections[i].setAttribute('data-crep-page',pages[p].getAttribute('data-crep-page'));",
   "}}",
-  "document.body.addEventListener('click',function(e){",
+  "document.addEventListener('click',function(e){",
+  "if(!editing)return;",
   "var el=e.target;",
   // 텍스트 노드 등이면 부모 엘리먼트로
   "if(!el||!el.tagName) el=el.parentElement;",
@@ -104,7 +117,8 @@ const CLICK_DETECTOR_SCRIPT = [
   "preview:(el.textContent||'').trim().replace(/\\s+/g,' ').slice(0,80)",
   "},'*');",
   "e.preventDefault();",
-  "});",
+  "e.stopPropagation();",
+  "},true);",
   "})();",
   "<" + "/script>",
 ].join("\n");
@@ -115,7 +129,9 @@ export type SitePreviewPageWithOrder = SitePreviewPage & { pageOrder: number };
  * 편집 모드용 미리보기 문서를 생성한다.
  * iframe sandbox="allow-scripts"가 필요하다.
  * 각 섹션에 data-crep-s, data-crep-page 속성이 추가되어
- * 클릭 시 부모 창으로 postMessage를 보낸다.
+ * 편집 모드에서 클릭 시 부모 창으로 postMessage를 보낸다.
+ * 부모 창이 { type: "crep-set-mode", editing } 을 보내면
+ * 보기 모드에서는 클릭을 가로채지 않는다.
  */
 export function buildEditablePreviewDocument(
   pages: SitePreviewPage[],

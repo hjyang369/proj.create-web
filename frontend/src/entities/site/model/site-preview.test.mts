@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildSitePreviewDocument } from "./site-preview.ts";
+import {
+  buildEditablePreviewDocument,
+  buildSitePreviewDocument,
+} from "./site-preview.ts";
 
 describe("buildSitePreviewDocument", () => {
   it("페이지 번호 순으로 html과 css를 한 문서로 합친다", () => {
@@ -95,5 +98,27 @@ describe("buildSitePreviewDocument", () => {
       document.includes("http://localhost:3001http://localhost:3001"),
       false,
     );
+  });
+});
+
+describe("buildEditablePreviewDocument", () => {
+  it("보기 모드에서는 클릭을 가로채지 않고, 편집 모드에서만 요소를 고른다", () => {
+    const document = buildEditablePreviewDocument([
+      {
+        pageOrder: 1,
+        html: '<a href="#services">이동</a><button type="button">예약</button>',
+        css: "",
+      },
+    ]);
+
+    const gate = document.indexOf("if(!editing)return;");
+    const prevent = document.indexOf("e.preventDefault();");
+
+    assert.match(document, /crep-set-mode/);
+    assert.match(document, /html\.crep-editing/);
+    assert.ok(gate >= 0);
+    assert.ok(prevent > gate);
+    assert.match(document, /addEventListener\('click',function\(e\)\{/);
+    assert.match(document, /\},true\)/);
   });
 });

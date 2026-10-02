@@ -20,97 +20,13 @@ import {
   initialSidebarOpen,
 } from "../model/edit-page-layout";
 import { shouldReplaceSiteImages } from "../model/should-replace-site-images";
+import { EditSiteAside, type SelectedComponent } from "./edit-site-aside";
 
 type PreviewState =
   | { kind: "loading" }
   | { kind: "guest" }
   | { kind: "error"; message: string }
   | { kind: "ready"; site: SiteEditorDetail };
-
-type SelectedComponent = {
-  pageOrder: number;
-  sectionIndex: number;
-  tagName: string;
-  preview: string;
-  elementHtml: string;
-};
-
-const iconButtonClassName = `flex shrink-0 items-center justify-center
-  h-10 w-10
-  text-gray-800
-  bg-white rounded-lg border border-gray-300
-  hover:bg-gray-100
-  disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
-
-const saveButtonClassName = `flex shrink-0 items-center justify-center
-  h-10 px-4
-  text-sm font-medium whitespace-nowrap text-white
-  bg-black rounded-lg
-  hover:bg-gray-900`;
-
-const regenerateButtonClassName = `flex items-center justify-center
-  h-10 w-full px-4
-  text-sm font-medium text-gray-800
-  bg-white rounded-lg border border-gray-300
-  hover:bg-gray-100
-  disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
-
-const iconClassName = "h-5 w-5";
-
-function BackIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={iconClassName}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 14 4 9l5-5" />
-      <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11" />
-    </svg>
-  );
-}
-
-function ForwardIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={iconClassName}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m15 14 5-5-5-5" />
-      <path d="M20 9H9.5a5.5 5.5 0 0 0-5.5 5.5 5.5 5.5 0 0 0 5.5 5.5H13" />
-    </svg>
-  );
-}
-
-function SidebarIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={iconClassName}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M15 4v16" />
-      {open ? <path d="m11 9-3 3 3 3" /> : <path d="m8 9 3 3-3 3" />}
-    </svg>
-  );
-}
 
 function previewMessage(preview: PreviewState): string {
   if (preview.kind === "guest") {
@@ -136,13 +52,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [regenerating, setRegenerating] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(true);
+  const editingRef = useRef(true);
+  const previewFrameRef = useRef<HTMLIFrameElement>(null);
   const [selectedComponent, setSelectedComponent] =
     useState<SelectedComponent | null>(null);
   const [editRequest, setEditRequest] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const editInputRef = useRef<HTMLTextAreaElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
 
@@ -209,12 +126,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
             preview: string;
             elementHtml: string;
           };
+        if (!editingRef.current) {
+          return;
+        }
         setSelectedComponent({ pageOrder, sectionIndex, tagName, preview: text, elementHtml });
         setEditRequest("");
         setEditError(null);
         setUploadedImageUrl(null);
         setSidebarOpen(true);
-        setTimeout(() => editInputRef.current?.focus(), 50);
       }
     }
     window.addEventListener("message", onMessage);
@@ -283,6 +202,25 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     }
   }
 
+  function postPreviewMode(nextEditing: boolean) {
+    previewFrameRef.current?.contentWindow?.postMessage(
+      { type: "crep-set-mode", editing: nextEditing },
+      "*",
+    );
+  }
+
+  function changePreviewMode(nextEditing: boolean) {
+    editingRef.current = nextEditing;
+    setEditing(nextEditing);
+    if (!nextEditing) {
+      setSelectedComponent(null);
+      setEditRequest("");
+      setEditError(null);
+      setUploadedImageUrl(null);
+    }
+    postPreviewMode(nextEditing);
+  }
+
   function openRegenerateForm() {
     if (preview.kind !== "ready" || regenerating || !preview.site.inputs) {
       return;
@@ -343,20 +281,6 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     }
   }
 
-  const sidebarToggle = (
-    <button
-      type="button"
-      aria-expanded={sidebarOpen}
-      aria-label={
-        sidebarOpen ? chrome.sidebar.collapseLabel : chrome.sidebar.expandLabel
-      }
-      className={iconButtonClassName}
-      onClick={() => setSidebarOpen((open) => !open)}
-    >
-      <SidebarIcon open={sidebarOpen} />
-    </button>
-  );
-
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-white lg:flex-row">
       <section
@@ -365,10 +289,12 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       >
         {preview.kind === "ready" && preview.site.pages.length > 0 ? (
           <iframe
+            ref={previewFrameRef}
             title={`${preview.site.name} 미리보기`}
             sandbox="allow-scripts"
             srcDoc={buildEditablePreviewDocument(preview.site.pages, API_URL)}
             className="h-full w-full border-0 bg-white"
+            onLoad={() => postPreviewMode(editingRef.current)}
           />
         ) : (
           <div className="flex h-full items-center justify-center px-6">
@@ -378,185 +304,33 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
           </div>
         )}
       </section>
-      {sidebarOpen ? (
-        <aside
-          className="flex shrink-0 flex-col
-            w-full max-h-72
-            border-t border-gray-200 bg-gray-50
-            lg:w-80 lg:max-h-none lg:border-l lg:border-t-0"
-        >
-          {chrome.controls === "sidebar" ? (
-            <div
-              className="flex shrink-0 items-center justify-between
-                gap-2 overflow-x-auto px-3 py-3
-                border-b border-gray-200"
-            >
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label={chrome.history.back.label}
-                  disabled={!chrome.history.back.enabled}
-                  className={iconButtonClassName}
-                >
-                  <BackIcon />
-                </button>
-                <button
-                  type="button"
-                  aria-label={chrome.history.forward.label}
-                  disabled={!chrome.history.forward.enabled}
-                  className={iconButtonClassName}
-                >
-                  <ForwardIcon />
-                </button>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {sidebarToggle}
-                <button type="button" className={saveButtonClassName}>
-                  {chrome.save.label}
-                </button>
-              </div>
-            </div>
-          ) : null}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="border-b border-gray-200 px-4 py-3">
-              <h2 className="text-sm font-medium text-black">
-                {chrome.sidebar.title}
-              </h2>
-            </div>
-            <div className="border-b border-gray-200 px-4 py-4">
-              <button
-                type="button"
-                disabled={
-                  preview.kind !== "ready" ||
-                  !preview.site.inputs ||
-                  regenerating
-                }
-                className={regenerateButtonClassName}
-                onClick={openRegenerateForm}
-              >
-                {regenerating
-                  ? chrome.regenerate.pendingLabel
-                  : chrome.regenerate.label}
-              </button>
-              {regenerateError ? (
-                <p className="mt-3 text-sm text-gray-800">{regenerateError}</p>
-              ) : null}
-            </div>
-            {selectedComponent ? (
-              <div className="border-b border-gray-200 px-4 py-4 flex flex-col gap-3">
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">
-                    선택된 요소
-                  </p>
-                  <p className="text-xs text-gray-800 font-mono bg-gray-100 rounded px-2 py-1">
-                    &lt;{selectedComponent.tagName}&gt;
-                  </p>
-                  {selectedComponent.preview ? (
-                    <p className="mt-1 text-xs text-gray-500 truncate">
-                      {selectedComponent.preview}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex flex-col gap-2">
-                  <textarea
-                    ref={editInputRef}
-                    rows={3}
-                    value={editRequest}
-                    onChange={(e) => setEditRequest(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                        void submitEditRequest();
-                      }
-                    }}
-                    disabled={editLoading}
-                    placeholder="수정 요청을 입력하세요. (예: 배경을 어둡게 해줘)"
-                    className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-                  />
-                  {editError ? (
-                    <p className="text-xs text-gray-800">{editError}</p>
-                  ) : null}
-                  {/* 업로드된 이미지 썸네일 */}
-                  {uploadedImageUrl ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5">
-                      <img
-                        src={uploadedImageUrl}
-                        alt="업로드 이미지"
-                        className="h-8 w-8 rounded object-cover border border-gray-200"
-                      />
-                      <span className="flex-1 truncate text-xs text-gray-600">
-                        이미지 준비됨
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setUploadedImageUrl(null)}
-                        className="text-gray-400 hover:text-gray-600"
-                        aria-label="이미지 제거"
-                      >
-                        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
-                      </button>
-                    </div>
-                  ) : null}
-                  <div className="flex gap-2">
-                    {/* 숨겨진 파일 입력 */}
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) void handleImageUpload(file);
-                        e.target.value = "";
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={imageUploading || editLoading}
-                      onClick={() => imageInputRef.current?.click()}
-                      className="flex h-9 items-center justify-center rounded-lg border border-gray-300 px-3 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                      aria-label="이미지 업로드"
-                      title="이미지 업로드"
-                    >
-                      {imageUploading ? (
-                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 10" /></svg>
-                      ) : (
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!editRequest.trim() || editLoading || imageUploading}
-                      onClick={() => void submitEditRequest()}
-                      className="flex-1 flex items-center justify-center h-9 rounded-lg bg-black text-sm font-medium text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {editLoading ? "수정 중..." : "AI로 수정"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={editLoading || imageUploading}
-                      onClick={() => {
-                        setSelectedComponent(null);
-                        setEditRequest("");
-                        setEditError(null);
-                        setUploadedImageUrl(null);
-                      }}
-                      className="h-9 px-3 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 disabled:text-gray-400"
-                    >
-                      취소
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="px-4 py-4 text-sm text-gray-500">
-                {chrome.sidebar.emptyMessage}
-              </p>
-            )}
-          </div>
-        </aside>
-      ) : (
-        <div className="absolute top-4 right-4">{sidebarToggle}</div>
-      )}
+      <EditSiteAside
+        open={sidebarOpen}
+        chrome={chrome}
+        onToggle={() => setSidebarOpen((open) => !open)}
+        editing={editing}
+        onChangeEditing={changePreviewMode}
+        canRegenerate={preview.kind === "ready" && preview.site.inputs != null}
+        regenerating={regenerating}
+        regenerateError={regenerateError}
+        onRegenerate={openRegenerateForm}
+        selectedComponent={selectedComponent}
+        editRequest={editRequest}
+        onEditRequestChange={setEditRequest}
+        onSubmitEdit={() => void submitEditRequest()}
+        editLoading={editLoading}
+        editError={editError}
+        uploadedImageUrl={uploadedImageUrl}
+        imageUploading={imageUploading}
+        onImageFile={(file) => void handleImageUpload(file)}
+        onClearImage={() => setUploadedImageUrl(null)}
+        onCancelSelection={() => {
+          setSelectedComponent(null);
+          setEditRequest("");
+          setEditError(null);
+          setUploadedImageUrl(null);
+        }}
+      />
       {formOpen && preview.kind === "ready" && preview.site.inputs ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-6">
           <div
