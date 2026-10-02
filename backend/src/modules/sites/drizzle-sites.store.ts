@@ -429,4 +429,105 @@ export class DrizzleSitesStore implements SitesStore {
         .where(eq(sites.id, siteId));
     });
   }
+
+  async updateOwnedPageContent(
+    userId: number,
+    siteId: number,
+    pageOrder: number,
+    content: { html: string; css: string },
+  ): Promise<import("./sites.store.js").StoredSitePageContent | null> {
+    const owned = await this.db
+      .select({ id: sites.id })
+      .from(sites)
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .limit(1);
+
+    if (!owned[0]) {
+      return null;
+    }
+
+    const now = new Date();
+
+    await this.db
+      .update(sitePages)
+      .set({
+        componentData: { html: content.html, css: content.css },
+        updatedAt: now,
+      })
+      .where(
+        and(eq(sitePages.siteId, siteId), eq(sitePages.pageOrder, pageOrder)),
+      );
+
+    await this.db
+      .update(sites)
+      .set({ updatedAt: now })
+      .where(eq(sites.id, siteId));
+
+    const rows = await this.db
+      .select({
+        pageType: sitePages.pageType,
+        pageOrder: sitePages.pageOrder,
+        componentData: sitePages.componentData,
+      })
+      .from(sitePages)
+      .where(
+        and(eq(sitePages.siteId, siteId), eq(sitePages.pageOrder, pageOrder)),
+      )
+      .limit(1);
+
+    if (!rows[0]) {
+      return null;
+    }
+
+    const pageContent = readStoredPageContent(rows[0].componentData);
+    if (!pageContent) {
+      return null;
+    }
+
+    return {
+      pageType: rows[0].pageType,
+      pageOrder: rows[0].pageOrder,
+      html: pageContent.html,
+      css: pageContent.css,
+    };
+  }
+
+  async addSiteImage(
+    userId: number,
+    siteId: number,
+    image: { url: string; originalName: string },
+  ): Promise<{ url: string } | null> {
+    // 소유권 확인
+    const owned = await this.db
+      .select({ id: sites.id })
+      .from(sites)
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .limit(1);
+
+    if (!owned[0]) {
+      return null;
+    }
+
+    // 현재 최대 order 조회
+    const existing = await this.db
+      .select({ order: siteImages.order })
+      .from(siteImages)
+      .where(eq(siteImages.siteId, siteId))
+      .orderBy(desc(siteImages.order))
+      .limit(1);
+
+    const nextOrder = (existing[0]?.order ?? -1) + 1;
+    const now = new Date();
+
+    await this.db.insert(siteImages).values({
+      siteId,
+      type: "site_image",
+      url: image.url,
+      originalName: image.originalName,
+      order: nextOrder,
+      createdAt: now,
+    });
+
+    return { url: image.url };
+  }
 }

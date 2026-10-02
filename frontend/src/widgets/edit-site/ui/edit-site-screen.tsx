@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/features/auth";
 import {
-  buildSitePreviewDocument,
+  buildEditablePreviewDocument,
+  editSiteComponent,
   getMySite,
   regenerateSiteDraft,
   updateSiteImages,
   updateSiteInputs,
+  uploadSiteImage,
   type SiteEditorDetail,
+  type SiteEditorPage,
 } from "@/entities/site";
 import { CreateSiteForm, type SiteFormSubmit } from "@/features/create-site";
 import { API_URL } from "@/shared/api";
@@ -23,6 +26,14 @@ type PreviewState =
   | { kind: "guest" }
   | { kind: "error"; message: string }
   | { kind: "ready"; site: SiteEditorDetail };
+
+type SelectedComponent = {
+  pageOrder: number;
+  sectionIndex: number;
+  tagName: string;
+  preview: string;
+  elementHtml: string;
+};
 
 const iconButtonClassName = `flex shrink-0 items-center justify-center
   h-10 w-10
@@ -125,6 +136,15 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [regenerating, setRegenerating] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [selectedComponent, setSelectedComponent] =
+    useState<SelectedComponent | null>(null);
+  const [editRequest, setEditRequest] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
 
   useEffect(() => {
     setSidebarOpen(
@@ -172,6 +192,96 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       cancelled = true;
     };
   }, [ready, user, siteId]);
+
+  // iframe 내 클릭 이벤트 수신
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (
+        typeof event.data === "object" &&
+        event.data !== null &&
+        event.data.type === "crep-click"
+      ) {
+        const { pageOrder, sectionIndex, tagName, preview: text, elementHtml } =
+          event.data as {
+            pageOrder: number;
+            sectionIndex: number;
+            tagName: string;
+            preview: string;
+            elementHtml: string;
+          };
+        setSelectedComponent({ pageOrder, sectionIndex, tagName, preview: text, elementHtml });
+        setEditRequest("");
+        setEditError(null);
+        setUploadedImageUrl(null);
+        setSidebarOpen(true);
+        setTimeout(() => editInputRef.current?.focus(), 50);
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  async function handleImageUpload(file: File) {
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) return;
+
+    setImageUploading(true);
+    setEditError(null);
+    try {
+      const result = await uploadSiteImage(id, file);
+      setUploadedImageUrl(result.url);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.";
+      setEditError(message);
+    } finally {
+      setImageUploading(false);
+    }
+  }
+
+  async function submitEditRequest() {
+    if (
+      preview.kind !== "ready" ||
+      !selectedComponent ||
+      !editRequest.trim() ||
+      editLoading
+    ) {
+      return;
+    }
+
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) return;
+
+    setEditLoading(true);
+    setEditError(null);
+
+    try {
+      const updatedPage = await editSiteComponent(id, {
+        pageOrder: selectedComponent.pageOrder,
+        sectionIndex: selectedComponent.sectionIndex,
+        elementHtml: selectedComponent.elementHtml,
+        imageUrl: uploadedImageUrl ?? undefined,
+        request: editRequest.trim(),
+      });
+
+      // 미리보기 상태의 해당 페이지를 교체
+      const updatedPages: typeof preview.site.pages = preview.site.pages.map(
+        (p) => (p.pageOrder === updatedPage.pageOrder ? (updatedPage as SiteEditorPage) : p),
+      );
+      setPreview({ kind: "ready", site: { ...preview.site, pages: updatedPages } });
+      setEditRequest("");
+      setUploadedImageUrl(null);
+      setSelectedComponent(null);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "컴포넌트를 수정하지 못했습니다.";
+      setEditError(message);
+    } finally {
+      setEditLoading(false);
+    }
+  }
 
   function openRegenerateForm() {
     if (preview.kind !== "ready" || regenerating || !preview.site.inputs) {
@@ -256,8 +366,8 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         {preview.kind === "ready" && preview.site.pages.length > 0 ? (
           <iframe
             title={`${preview.site.name} 미리보기`}
-            sandbox=""
-            srcDoc={buildSitePreviewDocument(preview.site.pages, API_URL)}
+            sandbox="allow-scripts"
+            srcDoc={buildEditablePreviewDocument(preview.site.pages, API_URL)}
             className="h-full w-full border-0 bg-white"
           />
         ) : (
@@ -332,9 +442,116 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
                 <p className="mt-3 text-sm text-gray-800">{regenerateError}</p>
               ) : null}
             </div>
-            <p className="px-4 py-4 text-sm text-gray-500">
-              {chrome.sidebar.emptyMessage}
-            </p>
+            {selectedComponent ? (
+              <div className="border-b border-gray-200 px-4 py-4 flex flex-col gap-3">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1">
+                    선택된 요소
+                  </p>
+                  <p className="text-xs text-gray-800 font-mono bg-gray-100 rounded px-2 py-1">
+                    &lt;{selectedComponent.tagName}&gt;
+                  </p>
+                  {selectedComponent.preview ? (
+                    <p className="mt-1 text-xs text-gray-500 truncate">
+                      {selectedComponent.preview}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <textarea
+                    ref={editInputRef}
+                    rows={3}
+                    value={editRequest}
+                    onChange={(e) => setEditRequest(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        void submitEditRequest();
+                      }
+                    }}
+                    disabled={editLoading}
+                    placeholder="수정 요청을 입력하세요. (예: 배경을 어둡게 해줘)"
+                    className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                  {editError ? (
+                    <p className="text-xs text-gray-800">{editError}</p>
+                  ) : null}
+                  {/* 업로드된 이미지 썸네일 */}
+                  {uploadedImageUrl ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5">
+                      <img
+                        src={uploadedImageUrl}
+                        alt="업로드 이미지"
+                        className="h-8 w-8 rounded object-cover border border-gray-200"
+                      />
+                      <span className="flex-1 truncate text-xs text-gray-600">
+                        이미지 준비됨
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setUploadedImageUrl(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                        aria-label="이미지 제거"
+                      >
+                        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3l10 10M13 3L3 13"/></svg>
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="flex gap-2">
+                    {/* 숨겨진 파일 입력 */}
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleImageUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={imageUploading || editLoading}
+                      onClick={() => imageInputRef.current?.click()}
+                      className="flex h-9 items-center justify-center rounded-lg border border-gray-300 px-3 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
+                      aria-label="이미지 업로드"
+                      title="이미지 업로드"
+                    >
+                      {imageUploading ? (
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="30 10" /></svg>
+                      ) : (
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!editRequest.trim() || editLoading || imageUploading}
+                      onClick={() => void submitEditRequest()}
+                      className="flex-1 flex items-center justify-center h-9 rounded-lg bg-black text-sm font-medium text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      {editLoading ? "수정 중..." : "AI로 수정"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={editLoading || imageUploading}
+                      onClick={() => {
+                        setSelectedComponent(null);
+                        setEditRequest("");
+                        setEditError(null);
+                        setUploadedImageUrl(null);
+                      }}
+                      className="h-9 px-3 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 disabled:text-gray-400"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="px-4 py-4 text-sm text-gray-500">
+                {chrome.sidebar.emptyMessage}
+              </p>
+            )}
           </div>
         </aside>
       ) : (

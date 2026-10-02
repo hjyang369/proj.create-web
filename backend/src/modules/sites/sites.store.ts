@@ -97,6 +97,17 @@ export type SitesStore = {
     siteId: number,
     pages: GeneratedSitePage[],
   ) => Promise<void>;
+  updateOwnedPageContent: (
+    userId: number,
+    siteId: number,
+    pageOrder: number,
+    content: { html: string; css: string },
+  ) => Promise<StoredSitePageContent | null>;
+  addSiteImage: (
+    userId: number,
+    siteId: number,
+    image: { url: string; originalName: string },
+  ) => Promise<{ url: string } | null>;
 };
 
 export const SITES_STORE = Symbol("SITES_STORE");

@@ -5,7 +5,7 @@ export type GeneratedSitePage = {
   css: string;
 };
 
-const DANGEROUS_HTML =
+export const DANGEROUS_HTML =
   /<\s*(script|iframe|object|embed|style)\b|\bon[a-z]+\s*=|javascript\s*:/i;
 
 export function parseSiteGenerationResponse(
@@ -80,3 +80,5 @@ function unwrapJsonText(raw: string): string {
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return fenced?.[1]?.trim() ?? trimmed;
 }
+
+export { unwrapJsonText };

@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  BadRequestException,
   Req,
   UploadedFiles,
   UseGuards,
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { SitesService } from "./sites.service.js";
 import { CreateSiteDto } from "./dto/create-site.dto.js";
 import { UpdateSiteImagesDto } from "./dto/update-site-images.dto.js";
+import { EditComponentDto } from "./dto/edit-component.dto.js";
 
 const multerOptions = {
   storage: memoryStorage(), // 파일을 메모리에 올려 서비스에서 직접 저장
@@ -92,6 +94,36 @@ export class SitesController {
     @Param("id", ParseIntPipe) id: number,
   ) {
     return this.sitesService.regenerateDraft(request.user.id, id);
+  }
+
+  @Post(":id/edit-component")
+  @UseGuards(JwtAuthGuard)
+  editComponent(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: EditComponentDto,
+  ) {
+    return this.sitesService.editComponent(request.user.id, id, dto);
+  }
+
+  @Post(":id/upload-image")
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: "image", maxCount: 1 }], {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    }),
+  )
+  uploadImage(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @UploadedFiles() files?: { image?: Express.Multer.File[] },
+  ) {
+    const file = files?.image?.[0];
+    if (!file) {
+      throw new BadRequestException("이미지 파일을 선택해 주세요.");
+    }
+    return this.sitesService.uploadSiteImage(request.user.id, id, file);
   }
 
   @Post()

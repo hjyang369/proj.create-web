@@ -5,6 +5,8 @@ import { generateText } from "ai";
 import { buildSiteGenerationPrompt } from "./site-generation-prompt.js";
 import {
   parseSiteGenerationResponse,
+  DANGEROUS_HTML,
+  unwrapJsonText,
   type GeneratedSitePage,
 } from "./site-generation-response.js";
 import type { SiteGenerator } from "./site-generator.js";
@@ -106,5 +108,81 @@ export class GeminiSiteGenerator implements SiteGenerator {
     });
 
     return parseSiteGenerationResponse(text, input.pageCount);
+  }
+
+  async editComponent(input: {
+    html: string;
+    css: string;
+    sectionIndex: number;
+    request: string;
+    elementHtml?: string;
+    imageUrl?: string;
+  }): Promise<{ html: string; css: string }> {
+    const apiKey = this.config
+      .get<string>("GOOGLE_GENERATIVE_AI_API_KEY")
+      ?.trim();
+    if (!apiKey) {
+      throw new Error(
+        "GOOGLE_GENERATIVE_AI_API_KEY가 비어 있습니다. backend/.env에 키를 넣어 주세요.",
+      );
+    }
+
+    const model =
+      this.config.get<string>("GEMINI_MODEL")?.trim() || DEFAULT_GEMINI_MODEL;
+
+    const system = `You are a web developer editing a section of a website page.
+Return ONLY a valid JSON object with "html" and "css" keys containing the complete updated page HTML body content and CSS.
+Preserve all other sections. Only modify the requested section.
+Do not include any explanation or markdown code fences.`;
+
+    const imageContext = input.imageUrl
+      ? `\nA new image has been uploaded and is available at this URL: ${input.imageUrl}\nIf the request involves an image, use this URL as the image src.`
+      : "";
+
+    const elementContext = input.elementHtml
+      ? `\nThe user clicked on this specific element:\n${input.elementHtml}\n\nModify that element according to the request below.`
+      : `\nModify section number ${input.sectionIndex + 1} (1-indexed, counting top-level elements from the top) according to the request below.`;
+
+    const prompt = `Current page HTML (body content):
+${input.html}
+
+Current page CSS:
+${input.css}
+${elementContext}${imageContext}
+User's modification request: ${input.request}
+
+Return a JSON object like: {"html":"...","css":"..."}`;
+
+    const text = await this.complete({
+      apiKey,
+      model,
+      system,
+      prompt,
+      timeoutMs: GEMINI_TIMEOUT_MS,
+    });
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(unwrapJsonText(text));
+    } catch {
+      throw new Error("AI 응답이 올바른 JSON이 아닙니다.");
+    }
+
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      typeof (parsed as Record<string, unknown>).html !== "string" ||
+      typeof (parsed as Record<string, unknown>).css !== "string"
+    ) {
+      throw new Error("AI 응답 형식이 올바르지 않습니다.");
+    }
+
+    const result = parsed as { html: string; css: string };
+
+    if (DANGEROUS_HTML.test(result.html)) {
+      throw new Error("AI 응답에 위험한 HTML이 포함되어 있습니다.");
+    }
+
+    return { html: result.html, css: result.css };
   }
 }

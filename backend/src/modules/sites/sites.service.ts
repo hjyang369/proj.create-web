@@ -301,4 +301,80 @@ export class SitesService {
       inputs: toSiteInputForm(record),
     };
   }
+
+  async editComponent(
+    userId: number,
+    siteId: number,
+    dto: { pageOrder: number; sectionIndex: number; request: string; elementHtml?: string; imageUrl?: string },
+  ): Promise<StoredSitePageContent> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
+    }
+
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const site = await this.sites.findOwnedWithPages(userId, siteId);
+    if (!site || site.userId !== userId) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const page = site.pages.find((p) => p.pageOrder === dto.pageOrder);
+    if (!page) {
+      throw new NotFoundException("해당 페이지를 찾을 수 없습니다.");
+    }
+
+    let updated: { html: string; css: string };
+    try {
+      updated = await this.generator.editComponent({
+        html: page.html,
+        css: page.css,
+        sectionIndex: dto.sectionIndex,
+        request: dto.request,
+        elementHtml: dto.elementHtml,
+        imageUrl: dto.imageUrl,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "컴포넌트를 수정하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+      throw new BadGatewayException(message);
+    }
+
+    const saved = await this.sites.updateOwnedPageContent(
+      userId,
+      siteId,
+      dto.pageOrder,
+      updated,
+    );
+    if (!saved) {
+      throw new NotFoundException("페이지를 저장하지 못했습니다.");
+    }
+
+    return saved;
+  }
+
+  async uploadSiteImage(
+    userId: number,
+    siteId: number,
+    file: Express.Multer.File,
+  ): Promise<{ url: string }> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
+    }
+
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const saved = await saveFile(file, "site-images");
+    const result = await this.sites.addSiteImage(userId, siteId, saved);
+    if (!result) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    return result;
+  }
 }
