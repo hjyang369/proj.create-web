@@ -39,6 +39,33 @@ describe("buildSitePreviewDocument", () => {
     assert.match(document, /안녕/);
   });
 
+  it("섹션 링크는 미리보기 문서 안에서 이동한다", () => {
+    const document = buildSitePreviewDocument([
+      {
+        pageOrder: 1,
+        html: '<a href="#services">이동</a><section id="services">서비스</section>',
+        css: "",
+      },
+    ]);
+
+    assert.match(document, /<base href="about:srcdoc">/);
+    assert.match(document, /href="#services"/);
+  });
+
+  it("다른 페이지의 섹션 링크도 같은 미리보기 안에서 이동한다", () => {
+    const document = buildSitePreviewDocument([
+      {
+        pageOrder: 2,
+        html: '<a href="index.html#services">이동</a><a href="./about.html#team">팀</a>',
+        css: "",
+      },
+    ]);
+
+    assert.match(document, /href="#services"/);
+    assert.match(document, /href="#team"/);
+    assert.equal(document.includes(".html#"), false);
+  });
+
   it("미리보기의 /uploads 주소만 백엔드 주소로 바꾼다", () => {
     const document = buildSitePreviewDocument(
       [

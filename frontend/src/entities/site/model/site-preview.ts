@@ -14,6 +14,14 @@ function sanitizePreviewCss(css: string): string {
   return css.replace(/<\/style/gi, "").replace(/<\s*script/gi, "");
 }
 
+function rewritePreviewSectionLinks(html: string): string {
+  return html.replace(
+    /\bhref\s*=\s*(["'])(?!https?:|mailto:|tel:)(?:\.\/|\/)?[^"'#]*?\.html(#[^"']*)?\1/gi,
+    (_match, quote: string, hash: string | undefined) =>
+      `href=${quote}${hash ?? "#"}${quote}`,
+  );
+}
+
 function rewriteUploadUrls(source: string, assetOrigin: string): string {
   const origin = assetOrigin.replace(/\/$/, "");
   return source.replace(/(^|["'(\s])\/uploads\//g, `$1${origin}/uploads/`);
@@ -32,7 +40,7 @@ export function buildSitePreviewDocument(
     .join("\n");
   const html = ordered
     .map((page) => {
-      const safeHtml = sanitizePreviewHtml(page.html);
+      const safeHtml = rewritePreviewSectionLinks(sanitizePreviewHtml(page.html));
       return assetOrigin ? rewriteUploadUrls(safeHtml, assetOrigin) : safeHtml;
     })
     .join("\n");
@@ -41,6 +49,7 @@ export function buildSitePreviewDocument(
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<base href="about:srcdoc">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 ${css}
