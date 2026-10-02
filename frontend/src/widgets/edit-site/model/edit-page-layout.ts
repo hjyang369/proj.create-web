@@ -7,6 +7,11 @@ export type EditPageChrome = {
     forward: { label: "앞으로가기"; enabled: false };
   };
   save: { label: "저장하기" };
+  regenerate: {
+    label: "초안으로 재생성";
+    pendingLabel: "다시 만드는 중...";
+    confirmMessage: string;
+  };
   sidebar: {
     title: string;
     emptyMessage: string;
@@ -25,6 +30,12 @@ export function describeEditPageChrome(): EditPageChrome {
       forward: { label: "앞으로가기", enabled: false },
     },
     save: { label: "저장하기" },
+    regenerate: {
+      label: "초안으로 재생성",
+      pendingLabel: "다시 만드는 중...",
+      confirmMessage:
+        "지금 보이는 초안을 지우고, 처음 입력한 내용으로 사이트를 다시 만들까요?",
+    },
     sidebar: {
       title: "편집",
       emptyMessage:

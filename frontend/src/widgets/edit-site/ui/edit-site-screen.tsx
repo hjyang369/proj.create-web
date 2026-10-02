@@ -5,6 +5,7 @@ import { useSession } from "@/features/auth";
 import {
   buildSitePreviewDocument,
   getMySite,
+  regenerateSiteDraft,
   type SiteEditorDetail,
 } from "@/entities/site";
 import { API_URL } from "@/shared/api";
@@ -31,6 +32,13 @@ const saveButtonClassName = `flex shrink-0 items-center justify-center
   text-sm font-medium whitespace-nowrap text-white
   bg-black rounded-lg
   hover:bg-gray-900`;
+
+const regenerateButtonClassName = `flex items-center justify-center
+  h-10 w-full px-4
+  text-sm font-medium text-gray-800
+  bg-white rounded-lg border border-gray-300
+  hover:bg-gray-100
+  disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
 
 const iconClassName = "h-5 w-5";
 
@@ -110,6 +118,8 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const { ready, user } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ kind: "loading" });
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
   useEffect(() => {
     setSidebarOpen(
@@ -157,6 +167,38 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       cancelled = true;
     };
   }, [ready, user, siteId]);
+
+  async function regenerateDraft() {
+    if (preview.kind !== "ready" || regenerating) {
+      return;
+    }
+
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(chrome.regenerate.confirmMessage);
+    if (!confirmed) {
+      return;
+    }
+
+    setRegenerating(true);
+    setRegenerateError(null);
+
+    try {
+      const site = await regenerateSiteDraft(id);
+      setPreview({ kind: "ready", site });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "초안을 다시 만들지 못했습니다.";
+      setRegenerateError(message);
+    } finally {
+      setRegenerating(false);
+    }
+  }
 
   const sidebarToggle = (
     <button
@@ -237,6 +279,23 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
               <h2 className="text-sm font-medium text-black">
                 {chrome.sidebar.title}
               </h2>
+            </div>
+            <div className="border-b border-gray-200 px-4 py-4">
+              <button
+                type="button"
+                disabled={preview.kind !== "ready" || regenerating}
+                className={regenerateButtonClassName}
+                onClick={() => {
+                  void regenerateDraft();
+                }}
+              >
+                {regenerating
+                  ? chrome.regenerate.pendingLabel
+                  : chrome.regenerate.label}
+              </button>
+              {regenerateError ? (
+                <p className="mt-3 text-sm text-gray-800">{regenerateError}</p>
+              ) : null}
             </div>
             <p className="px-4 py-4 text-sm text-gray-500">
               {chrome.sidebar.emptyMessage}

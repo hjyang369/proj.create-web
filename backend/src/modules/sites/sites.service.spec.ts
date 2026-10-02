@@ -144,6 +144,10 @@ describe('SitesService.create', () => {
         async findOwnedWithPages() {
           return null;
         },
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {},
       },
       {
         async generatePages() {
@@ -173,6 +177,10 @@ describe('SitesService.create', () => {
         async findOwnedWithPages() {
           return null;
         },
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {},
       },
       {
         async generatePages() {
@@ -203,6 +211,10 @@ describe('SitesService.create', () => {
         async findOwnedWithPages() {
           return null;
         },
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {},
       },
       {
         async generatePages() {
@@ -295,6 +307,132 @@ describe('SitesService.getMine', () => {
     );
 
     await expect(service.getMine(0, 1)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(called).toBe(false);
+  });
+});
+
+const storedGenerationInput: CreateSiteRecord = {
+  userId: 1,
+  name: '카페',
+  businessType: '카페',
+  oneLineIntro: '좋은 커피',
+  description: null,
+  address: null,
+  phone: null,
+  email: null,
+  purpose: 'company_intro',
+  targetCustomer: null,
+  mainColor: null,
+  atmosphere: 'warm',
+  extraRequest: '로고를 크게',
+  pageCount: 1,
+  pageComponents: ['company_intro'],
+  referenceUrl: null,
+  optionalLinks: null,
+  logo: { url: '/uploads/logos/logo.png', originalName: 'logo.png' },
+  photos: [],
+};
+
+describe('SitesService.regenerateDraft', () => {
+  it('저장된 입력으로 AI를 다시 호출하고 페이지를 초안으로 바꾼다', async () => {
+    let generatedFrom: CreateSiteRecord | undefined;
+    let replaced: { siteId: number; pages: GeneratedSitePage[] } | undefined;
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          return storedGenerationInput;
+        },
+        async replaceGeneratedPages(siteId, pages) {
+          replaced = { siteId, pages };
+        },
+      } as SitesStore,
+      {
+        async generatePages(input) {
+          generatedFrom = input;
+          return [generatedPage];
+        },
+      },
+    );
+
+    await expect(service.regenerateDraft(1, 4)).resolves.toEqual({
+      id: 4,
+      name: '카페',
+      pages: [
+        {
+          pageType: 'company_intro',
+          pageOrder: 1,
+          html: generatedPage.html,
+          css: generatedPage.css,
+        },
+      ],
+    });
+    expect(generatedFrom).toEqual(storedGenerationInput);
+    expect(replaced).toEqual({ siteId: 4, pages: [generatedPage] });
+  });
+
+  it('저장된 입력이 없으면 페이지를 바꾸지 않는다', async () => {
+    let replaced = false;
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {
+          replaced = true;
+        },
+      } as SitesStore,
+      {
+        async generatePages() {
+          return [generatedPage];
+        },
+      },
+    );
+
+    await expect(service.regenerateDraft(1, 4)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(replaced).toBe(false);
+  });
+
+  it('AI 생성에 실패하면 기존 페이지를 유지한다', async () => {
+    let replaced = false;
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          return storedGenerationInput;
+        },
+        async replaceGeneratedPages() {
+          replaced = true;
+        },
+      } as SitesStore,
+      {
+        async generatePages() {
+          throw new Error('AI 응답이 올바른 JSON이 아닙니다.');
+        },
+      },
+    );
+
+    await expect(service.regenerateDraft(1, 4)).rejects.toBeInstanceOf(
+      BadGatewayException,
+    );
+    expect(replaced).toBe(false);
+  });
+
+  it('사용자 번호가 없으면 입력을 조회하지 않는다', async () => {
+    let called = false;
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          called = true;
+          return storedGenerationInput;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.regenerateDraft(0, 4)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
     expect(called).toBe(false);

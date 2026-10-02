@@ -72,6 +72,14 @@ export type SitesStore = {
     userId: number,
     siteId: number,
   ) => Promise<StoredOwnedSite | null>;
+  findOwnedGenerationInput: (
+    userId: number,
+    siteId: number,
+  ) => Promise<CreateSiteRecord | null>;
+  replaceGeneratedPages: (
+    siteId: number,
+    pages: GeneratedSitePage[],
+  ) => Promise<void>;
 };
 
 export const SITES_STORE = Symbol("SITES_STORE");

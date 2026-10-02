@@ -175,4 +175,41 @@ export class SitesService {
 
     return created;
   }
+
+  async regenerateDraft(
+    userId: number,
+    siteId: number,
+  ): Promise<SiteEditorDetail> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
+    }
+
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const record = await this.sites.findOwnedGenerationInput(userId, siteId);
+    if (!record || record.userId !== userId) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    let pages;
+    try {
+      pages = await this.generator.generatePages(record);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "사이트를 다시 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
+      throw new BadGatewayException(message);
+    }
+
+    await this.sites.replaceGeneratedPages(siteId, pages);
+
+    return {
+      id: siteId,
+      name: record.name,
+      pages: [...pages].sort((left, right) => left.pageOrder - right.pageOrder),
+    };
+  }
 }

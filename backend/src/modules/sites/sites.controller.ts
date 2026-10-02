@@ -44,6 +44,15 @@ export class SitesController {
     return this.sitesService.getMine(request.user.id, id);
   }
 
+  @Post(":id/regenerate")
+  @UseGuards(JwtAuthGuard)
+  regenerate(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+  ) {
+    return this.sitesService.regenerateDraft(request.user.id, id);
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(

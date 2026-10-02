@@ -9,12 +9,13 @@ import { siteInputs } from "../../database/schema/site-inputs.js";
 import { siteImages } from "../../database/schema/site-images.js";
 import { sitePages } from "../../database/schema/site-pages.js";
 import type { GeneratedSitePage } from "./site-generation-response.js";
+import { toCreateSiteRecord } from "./site-input-record.js";
 import { readStoredPageContent } from "./site-page-content.js";
 import type {
+  CreateSiteRecord,
   SitesStore,
   StoredOwnedSite,
   StoredSite,
-  CreateSiteRecord,
 } from "./sites.store.js";
 
 @Injectable()
@@ -206,5 +207,88 @@ export class DrizzleSitesStore implements SitesStore {
       name: first.name,
       pages,
     };
+  }
+
+  async findOwnedGenerationInput(
+    userId: number,
+    siteId: number,
+  ): Promise<CreateSiteRecord | null> {
+    const rows = await this.db
+      .select({
+        userId: sites.userId,
+        businessType: siteInputs.businessType,
+        companyName: siteInputs.companyName,
+        oneLineIntro: siteInputs.oneLineIntro,
+        description: siteInputs.description,
+        address: siteInputs.address,
+        phone: siteInputs.phone,
+        email: siteInputs.email,
+        purpose: siteInputs.purpose,
+        targetCustomer: siteInputs.targetCustomer,
+        mainColor: siteInputs.mainColor,
+        atmosphere: siteInputs.atmosphere,
+        extraRequest: siteInputs.extraRequest,
+        pageCount: siteInputs.pageCount,
+        pageComponents: siteInputs.pageComponents,
+        referenceUrl: siteInputs.referenceUrl,
+        optionalLinks: siteInputs.optionalLinks,
+      })
+      .from(sites)
+      .innerJoin(siteInputs, eq(siteInputs.siteId, sites.id))
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .limit(1);
+
+    const input = rows[0];
+    if (!input) {
+      return null;
+    }
+
+    const images = await this.db
+      .select({
+        type: siteImages.type,
+        url: siteImages.url,
+        originalName: siteImages.originalName,
+        order: siteImages.order,
+      })
+      .from(siteImages)
+      .where(eq(siteImages.siteId, siteId))
+      .orderBy(asc(siteImages.order));
+
+    return toCreateSiteRecord(input, images);
+  }
+
+  async replaceGeneratedPages(
+    siteId: number,
+    pages: GeneratedSitePage[],
+  ): Promise<void> {
+    if (pages.length === 0) {
+      throw new Error("생성된 페이지가 없습니다.");
+    }
+
+    const now = new Date();
+
+    await this.db.transaction(async (tx) => {
+      await tx.delete(sitePages).where(eq(sitePages.siteId, siteId));
+      await tx.insert(sitePages).values(
+        pages.map((page) => ({
+          siteId,
+          pageType: page.pageType,
+          pageOrder: page.pageOrder,
+          componentData: {
+            html: page.html,
+            css: page.css,
+          },
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+      await tx
+        .update(sites)
+        .set({
+          status: "draft",
+          updatedAt: now,
+        })
+        .where(eq(sites.id, siteId));
+    });
   }
 }
