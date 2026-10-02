@@ -158,79 +158,81 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     };
   }, [ready, user, siteId]);
 
+  const sidebarToggle = (
+    <button
+      type="button"
+      aria-expanded={sidebarOpen}
+      aria-label={
+        sidebarOpen ? chrome.sidebar.collapseLabel : chrome.sidebar.expandLabel
+      }
+      className={iconButtonClassName}
+      onClick={() => setSidebarOpen((open) => !open)}
+    >
+      <SidebarIcon open={sidebarOpen} />
+    </button>
+  );
+
   return (
-    <div className="flex h-dvh min-h-0 flex-col bg-white">
-      <header
-        className="flex shrink-0 items-center justify-between
-          h-14
-          gap-3 overflow-x-auto px-4
-          border-b border-gray-200
-          sm:px-6"
+    <div className="relative flex h-dvh min-h-0 flex-col bg-white lg:flex-row">
+      <section
+        aria-label="사이트 미리보기"
+        className="min-h-0 min-w-0 flex-1 bg-gray-50"
       >
-        <div className="flex min-w-0 items-center gap-2">
-          <button
-            type="button"
-            aria-label={chrome.history.back.label}
-            disabled={!chrome.history.back.enabled}
-            className={iconButtonClassName}
-          >
-            <BackIcon />
-          </button>
-          <button
-            type="button"
-            aria-label={chrome.history.forward.label}
-            disabled={!chrome.history.forward.enabled}
-            className={iconButtonClassName}
-          >
-            <ForwardIcon />
-          </button>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            aria-expanded={sidebarOpen}
-            aria-label={
-              sidebarOpen
-                ? chrome.sidebar.collapseLabel
-                : chrome.sidebar.expandLabel
-            }
-            className={iconButtonClassName}
-            onClick={() => setSidebarOpen((open) => !open)}
-          >
-            <SidebarIcon open={sidebarOpen} />
-          </button>
-          <button type="button" className={saveButtonClassName}>
-            {chrome.save.label}
-          </button>
-        </div>
-      </header>
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <section
-          aria-label="사이트 미리보기"
-          className="min-h-0 min-w-0 flex-1 bg-gray-50"
+        {preview.kind === "ready" && preview.site.pages.length > 0 ? (
+          <iframe
+            title={`${preview.site.name} 미리보기`}
+            sandbox=""
+            srcDoc={buildSitePreviewDocument(preview.site.pages, API_URL)}
+            className="h-full w-full border-0 bg-white"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-6">
+            <p className="text-center text-sm text-gray-500">
+              {previewMessage(preview)}
+            </p>
+          </div>
+        )}
+      </section>
+      {sidebarOpen ? (
+        <aside
+          className="flex shrink-0 flex-col
+            w-full max-h-72
+            border-t border-gray-200 bg-gray-50
+            lg:w-80 lg:max-h-none lg:border-l lg:border-t-0"
         >
-          {preview.kind === "ready" && preview.site.pages.length > 0 ? (
-            <iframe
-              title={`${preview.site.name} 미리보기`}
-              sandbox=""
-              srcDoc={buildSitePreviewDocument(preview.site.pages, API_URL)}
-              className="h-full w-full border-0 bg-white"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center px-6">
-              <p className="text-center text-sm text-gray-500">
-                {previewMessage(preview)}
-              </p>
+          {chrome.controls === "sidebar" ? (
+            <div
+              className="flex shrink-0 items-center justify-between
+                gap-2 overflow-x-auto px-3 py-3
+                border-b border-gray-200"
+            >
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label={chrome.history.back.label}
+                  disabled={!chrome.history.back.enabled}
+                  className={iconButtonClassName}
+                >
+                  <BackIcon />
+                </button>
+                <button
+                  type="button"
+                  aria-label={chrome.history.forward.label}
+                  disabled={!chrome.history.forward.enabled}
+                  className={iconButtonClassName}
+                >
+                  <ForwardIcon />
+                </button>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {sidebarToggle}
+                <button type="button" className={saveButtonClassName}>
+                  {chrome.save.label}
+                </button>
+              </div>
             </div>
-          )}
-        </section>
-        {sidebarOpen ? (
-          <aside
-            className="flex shrink-0 flex-col
-              w-full max-h-64
-              border-t border-gray-200 bg-gray-50
-              lg:w-80 lg:max-h-none lg:border-l lg:border-t-0"
-          >
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="border-b border-gray-200 px-4 py-3">
               <h2 className="text-sm font-medium text-black">
                 {chrome.sidebar.title}
@@ -239,9 +241,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
             <p className="px-4 py-4 text-sm text-gray-500">
               {chrome.sidebar.emptyMessage}
             </p>
-          </aside>
-        ) : null}
-      </div>
+          </div>
+        </aside>
+      ) : (
+        <div className="absolute top-4 right-4">{sidebarToggle}</div>
+      )}
     </div>
   );
 }

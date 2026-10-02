@@ -1,6 +1,7 @@
 export type EditPageChrome = {
   previewSide: "left";
   sidebarSide: "right";
+  controls: "sidebar";
   history: {
     back: { label: "뒤로가기"; enabled: false };
     forward: { label: "앞으로가기"; enabled: false };
@@ -18,6 +19,7 @@ export function describeEditPageChrome(): EditPageChrome {
   return {
     previewSide: "left",
     sidebarSide: "right",
+    controls: "sidebar",
     history: {
       back: { label: "뒤로가기", enabled: false },
       forward: { label: "앞으로가기", enabled: false },
@@ -25,7 +27,8 @@ export function describeEditPageChrome(): EditPageChrome {
     save: { label: "저장하기" },
     sidebar: {
       title: "편집",
-      emptyMessage: "요소를 고르면 여기에서 편집합니다.",
+      emptyMessage:
+        "요소를 고르면 여기에서 편집합니다. \n 좌측 마우스 클릭으로 요소 선택, 우측 마우스 클릭으로 요소 개별 편집",
       collapseLabel: "사이드바 접기",
       expandLabel: "사이드바 펼치기",
     },
