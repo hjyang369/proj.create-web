@@ -77,4 +77,16 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.user).not.toContain('"photoUrls"');
     expect(prompt.user).toContain('"companyName": "크레프 스튜디오"');
   });
+
+  it("모든 페이지에 nav와 footer, 저작권 표시, 페이지 수에 따른 이동 방식을 요구한다", () => {
+    const prompt = buildSiteGenerationPrompt(completeInput);
+
+    expect(prompt.system).toContain("<nav>");
+    expect(prompt.system).toContain("<footer>");
+    expect(prompt.system).toContain("저작권");
+    expect(prompt.system).toContain("pageCount가 1");
+    expect(prompt.system).toContain("스크롤");
+    expect(prompt.system).toContain("pageCount가 2 이상");
+    expect(prompt.system).toContain("#page-{pageOrder}");
+  });
 });

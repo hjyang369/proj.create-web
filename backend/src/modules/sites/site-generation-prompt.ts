@@ -1,29 +1,29 @@
-import type { CreateSiteRecord } from "./sites.store.js";
+import type { CreateSiteRecord } from './sites.store.js';
 
 export type SiteGenerationPrompt = {
   system: string;
   user: string;
 };
 
-const PURPOSE_LABELS: Record<CreateSiteRecord["purpose"], string> = {
-  company_intro: "회사소개용",
-  investment: "투자·IR용",
-  sales: "고객 영업용",
-  recruitment: "채용 브랜딩용",
-  promotion: "서비스 홍보용",
-  inquiry: "문의·상담 전환용",
+const PURPOSE_LABELS: Record<CreateSiteRecord['purpose'], string> = {
+  company_intro: '회사소개용',
+  investment: '투자·IR용',
+  sales: '고객 영업용',
+  recruitment: '채용 브랜딩용',
+  promotion: '서비스 홍보용',
+  inquiry: '문의·상담 전환용',
 };
 
 const ATMOSPHERE_LABELS: Record<
-  NonNullable<CreateSiteRecord["atmosphere"]>,
+  NonNullable<CreateSiteRecord['atmosphere']>,
   string
 > = {
-  warm: "따뜻한",
-  professional: "전문적인",
-  modern: "모던한",
-  cute: "귀여운",
-  elegant: "우아한",
-  bold: "강렬한",
+  warm: '따뜻한',
+  professional: '전문적인',
+  modern: '모던한',
+  cute: '귀여운',
+  elegant: '우아한',
+  bold: '강렬한',
 };
 
 export function buildSiteGenerationPrompt(
@@ -63,7 +63,12 @@ export function buildSiteGenerationPrompt(
 - 설명이나 Markdown 코드 블록 없이 유효한 JSON 객체만 반환하세요.
 - 최상위 형식은 {"pages":[{"pageType":"string","pageOrder":1,"html":"string","css":"string"}]} 입니다.
 - pages 배열의 길이는 요청된 pageCount와 정확히 같아야 하며 pageOrder는 1부터 연속되어야 합니다.
-- 각 html은 해당 페이지의 완성된 <main> 콘텐츠여야 하고, CSS는 별도 css 필드에 작성하세요.
+- 각 html은 <header> 안의 <nav>, <main>, <footer>를 모두 포함한 완성된 페이지여야 하고, CSS는 별도 css 필드에 작성하세요.
+- <nav>와 <footer>는 모든 페이지에 반드시 넣으세요. 생략하지 마세요.
+- pageCount가 1이면 nav 링크는 같은 페이지 섹션으로 스크롤하는 #섹션id 앵커로 작성하고, 이동 대상 섹션에 같은 id를 넣으세요.
+- pageCount가 2 이상이면 각 페이지의 최상위 요소에 id="page-{pageOrder}"를 넣고, nav 링크는 href="#page-{pageOrder}"로 해당 페이지로 이동하게 하세요. 모든 페이지의 nav 항목은 같아야 합니다.
+- <footer>에는 회사명이 들어간 저작권 표시(©)를 넣으세요.
+- CSS는 별도 css 필드에 작성하세요.
 - 모든 주요 섹션에 사이트 전체에서 고유한 data-component-id와 의미 있는 data-component-type을 넣으세요.
 - 모바일과 데스크톱에서 사용할 수 있는 반응형 CSS와 시맨틱 HTML을 작성하세요.
 - 제공된 로고와 사진 URL만 이미지 src로 사용할 수 있습니다. 이미지가 없으면 외부 이미지 URL을 만들지 마세요.
