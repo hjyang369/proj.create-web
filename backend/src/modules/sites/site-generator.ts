@@ -7,6 +7,7 @@ export type SiteGenerator = {
     html: string;
     css: string;
     sectionIndex: number;
+    innerSectionIndex?: number;
     request: string;
     elementHtml?: string;
     imageUrl?: string;

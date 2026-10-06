@@ -6,6 +6,7 @@ import type { EditPageChrome } from "../model/edit-page-layout";
 export type SelectedComponent = {
   pageOrder: number;
   sectionIndex: number;
+  innerSectionIndex: number; // -1이면 outer 섹션 직접 수정
   tagName: string;
   preview: string;
   elementHtml: string;

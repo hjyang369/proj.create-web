@@ -5,6 +5,7 @@ export type EditComponentRequest = {
   pageOrder: number;
   pageType: string;
   sectionIndex: number;
+  innerSectionIndex?: number;
   request: string;
   html: string;
   css: string;

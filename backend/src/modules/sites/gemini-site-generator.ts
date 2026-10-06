@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { generateText, type LanguageModelUsage } from "ai";
 import { buildSiteGenerationPrompt } from "./site-generation-prompt.js";
 import {
   parseSiteGenerationResponse,
@@ -12,6 +12,161 @@ import {
 import type { SiteGenerator } from "./site-generator.js";
 import type { CreateSiteRecord } from "./sites.store.js";
 
+// ── HTML 섹션 파싱 헬퍼 ─────────────────────────────────────────────────────
+
+const VOID_ELEMENTS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input",
+  "link", "meta", "param", "source", "track", "wbr",
+]);
+
+type SectionRange = { start: number; end: number };
+
+/**
+ * HTML 문자열에서 최상위(depth=0) 태그의 시작·끝 위치 목록을 반환한다.
+ * AI가 생성한 잘 형성된 HTML을 전제로 한다.
+ */
+function findHtmlSectionRanges(html: string): SectionRange[] {
+  const ranges: SectionRange[] = [];
+  let i = 0;
+
+  while (i < html.length) {
+    // 공백 건너뛰기
+    if (/\s/.test(html[i])) { i++; continue; }
+    // '<' 가 아니면 건너뛰기
+    if (html[i] !== "<") { i++; continue; }
+
+    // HTML 주석 건너뛰기
+    if (html.startsWith("<!--", i)) {
+      const end = html.indexOf("-->", i);
+      i = end >= 0 ? end + 3 : i + 1;
+      continue;
+    }
+
+    // 닫는 태그는 최상위에서 건너뛰기
+    if (html[i + 1] === "/") {
+      const end = html.indexOf(">", i);
+      i = end >= 0 ? end + 1 : i + 1;
+      continue;
+    }
+
+    // 태그 이름 추출
+    const tagMatch = html.slice(i + 1).match(/^([a-zA-Z][a-zA-Z0-9-]*)/);
+    if (!tagMatch) { i++; continue; }
+
+    const tagName = tagMatch[1].toLowerCase();
+    const sectionStart = i;
+
+    // 여는 태그의 끝 위치
+    const openTagEnd = html.indexOf(">", i);
+    if (openTagEnd < 0) { i++; continue; }
+
+    // 자체 닫는 태그 또는 void 요소
+    if (html[openTagEnd - 1] === "/" || VOID_ELEMENTS.has(tagName)) {
+      ranges.push({ start: sectionStart, end: openTagEnd + 1 });
+      i = openTagEnd + 1;
+      continue;
+    }
+
+    // 매칭되는 닫는 태그를 depth 추적으로 찾기
+    let depth = 1;
+    let j = openTagEnd + 1;
+    let sectionEnd = -1;
+
+    while (j < html.length && depth > 0) {
+      if (html[j] !== "<") { j++; continue; }
+
+      // 주석 건너뛰기
+      if (html.startsWith("<!--", j)) {
+        const end = html.indexOf("-->", j);
+        j = end >= 0 ? end + 3 : j + 1;
+        continue;
+      }
+
+      if (html[j + 1] === "/") {
+        // 닫는 태그
+        const closeMatch = html.slice(j + 2).match(/^([a-zA-Z][a-zA-Z0-9-]*)\s*>/);
+        if (closeMatch && closeMatch[1].toLowerCase() === tagName) {
+          depth--;
+          const end = j + 2 + closeMatch[0].length;
+          if (depth === 0) {
+            sectionEnd = end;
+            break;
+          }
+          j = end;
+          continue;
+        }
+      } else {
+        // 같은 이름의 여는 태그 — depth 증가
+        const openMatch = html.slice(j + 1).match(/^([a-zA-Z][a-zA-Z0-9-]*)/);
+        if (
+          openMatch &&
+          openMatch[1].toLowerCase() === tagName &&
+          !VOID_ELEMENTS.has(tagName)
+        ) {
+          depth++;
+        }
+      }
+
+      j++;
+    }
+
+    if (sectionEnd >= 0) {
+      ranges.push({ start: sectionStart, end: sectionEnd });
+      i = sectionEnd;
+    } else {
+      i++; // 닫는 태그를 못 찾으면 건너뛰기
+    }
+  }
+
+  return ranges;
+}
+
+/** HTML 최상위 섹션 문자열 배열을 반환한다. */
+export function splitHtmlSections(html: string): string[] {
+  return findHtmlSectionRanges(html).map(({ start, end }) =>
+    html.slice(start, end),
+  );
+}
+
+/**
+ * 전체 HTML에서 sectionIndex 번째 최상위 섹션을 newSection으로 교체한 HTML을 반환한다.
+ * 범위를 벗어나면 원본 HTML을 그대로 반환한다.
+ */
+export function replaceSectionInHtml(
+  html: string,
+  sectionIndex: number,
+  newSection: string,
+): string {
+  const ranges = findHtmlSectionRanges(html);
+  if (sectionIndex < 0 || sectionIndex >= ranges.length) {
+    return html;
+  }
+  const { start, end } = ranges[sectionIndex];
+  return html.slice(0, start) + newSection + html.slice(end);
+}
+
+/**
+ * 요소의 여는 태그 이후부터 닫는 태그 직전까지의 내용을 반환한다.
+ * `<main>..content..</main>` → `..content..`
+ */
+function extractElementContent(element: string): string {
+  const openEnd = element.indexOf(">");
+  const closeStart = element.lastIndexOf("</");
+  if (openEnd < 0 || closeStart <= openEnd) return "";
+  return element.slice(openEnd + 1, closeStart);
+}
+
+/**
+ * 요소의 내부 내용을 newContent로 교체한 문자열을 반환한다.
+ * `<main>..old..</main>`, `..new..` → `<main>..new..</main>`
+ */
+function replaceElementContent(element: string, newContent: string): string {
+  const openEnd = element.indexOf(">");
+  const closeStart = element.lastIndexOf("</");
+  if (openEnd < 0 || closeStart <= openEnd) return element;
+  return element.slice(0, openEnd + 1) + newContent + element.slice(closeStart);
+}
+
 export const GEMINI_TEXT_GENERATOR = Symbol("GEMINI_TEXT_GENERATOR");
 export const GEMINI_TIMEOUT_MS = 90_000;
 export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
@@ -21,6 +176,14 @@ export function geminiRequestOptions(timeoutMs: number) {
     timeout: timeoutMs,
     maxRetries: 0,
   };
+}
+
+export function logGeminiTokenUsage(usage: LanguageModelUsage) {
+  console.log("Gemini 토큰", {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
+  });
 }
 
 export function describeGeminiError(error: unknown): string {
@@ -60,12 +223,13 @@ export async function generateGeminiText(input: {
   const google = createGoogleGenerativeAI({ apiKey: input.apiKey });
 
   try {
-    const { text } = await generateText({
+    const { text, usage } = await generateText({
       model: google(input.model),
       system: input.system,
       prompt: input.prompt,
       ...geminiRequestOptions(input.timeoutMs),
     });
+    logGeminiTokenUsage(usage);
     return text;
   } catch (error) {
     throw new Error(describeGeminiError(error));
@@ -114,6 +278,7 @@ export class GeminiSiteGenerator implements SiteGenerator {
     html: string;
     css: string;
     sectionIndex: number;
+    innerSectionIndex?: number;
     request: string;
     elementHtml?: string;
     imageUrl?: string;
@@ -130,9 +295,40 @@ export class GeminiSiteGenerator implements SiteGenerator {
     const model =
       this.config.get<string>("GEMINI_MODEL")?.trim() || DEFAULT_GEMINI_MODEL;
 
-    const system = `You are a web developer editing a section of a website page.
-Return ONLY a valid JSON object with "html" and "css" keys containing the complete updated page HTML body content and CSS.
-Preserve all other sections. Only modify the requested section.
+    // 수정 대상 섹션만 추출 — AI에게 보내는 토큰을 줄임
+    const outerRanges = findHtmlSectionRanges(input.html);
+    const outerRange = outerRanges[input.sectionIndex];
+
+    // innerSectionIndex가 있으면 outer 섹션 안의 inner 섹션까지 좁혀 추출
+    const useInner =
+      outerRange != null &&
+      input.innerSectionIndex != null &&
+      input.innerSectionIndex >= 0;
+
+    let sectionHtml: string;
+    let innerRange: SectionRange | undefined;
+    let outerSection: string | undefined;
+    let innerContent: string | undefined;
+
+    if (useInner) {
+      outerSection = input.html.slice(outerRange!.start, outerRange!.end);
+      innerContent = extractElementContent(outerSection);
+      const innerRanges = findHtmlSectionRanges(innerContent);
+      innerRange = innerRanges[input.innerSectionIndex!];
+      sectionHtml = innerRange
+        ? innerContent.slice(innerRange.start, innerRange.end)
+        : outerSection; // inner 추출 실패 → outer 전체 폴백
+    } else {
+      sectionHtml = outerRange
+        ? input.html.slice(outerRange.start, outerRange.end)
+        : input.html; // outer 추출 실패 → 전체 HTML 폴백
+    }
+
+    const system = `You are a web developer editing a single section of a website page.
+Return ONLY a valid JSON object with "html" and "css" keys.
+"html" must contain only the modified section HTML (the section you were given, not the full page).
+"css" must contain the complete updated page CSS.
+Do not wrap the section in any extra tags.
 Do not include any explanation or markdown code fences.`;
 
     const imageContext = input.imageUrl
@@ -141,17 +337,19 @@ Do not include any explanation or markdown code fences.`;
 
     const elementContext = input.elementHtml
       ? `\nThe user clicked on this specific element:\n${input.elementHtml}\n\nModify that element according to the request below.`
-      : `\nModify section number ${input.sectionIndex + 1} (1-indexed, counting top-level elements from the top) according to the request below.`;
+      : `\nModify the section according to the request below.`;
 
-    const prompt = `Current page HTML (body content):
-${input.html}
+    const prompt = `Current section HTML to modify:
+${sectionHtml}
 
 Current page CSS:
 ${input.css}
 ${elementContext}${imageContext}
 User's modification request: ${input.request}
 
-Return a JSON object like: {"html":"...","css":"..."}`;
+Return a JSON object like: {"html":"...","css":"..."}
+"html" = the modified section HTML only (not the full page)
+"css" = the complete updated page CSS`;
 
     const text = await this.complete({
       apiKey,
@@ -183,6 +381,29 @@ Return a JSON object like: {"html":"...","css":"..."}`;
       throw new Error("AI 응답에 위험한 HTML이 포함되어 있습니다.");
     }
 
-    return { html: result.html, css: result.css };
+    // 수정된 섹션을 원래 위치에 끼워넣어 전체 HTML 복원
+    let updatedHtml: string;
+
+    if (useInner && outerRange && innerRange && outerSection != null && innerContent != null) {
+      // inner → outer → 전체 HTML 순으로 조립
+      const newInnerContent =
+        innerContent.slice(0, innerRange.start) +
+        result.html +
+        innerContent.slice(innerRange.end);
+      const newOuterSection = replaceElementContent(outerSection, newInnerContent);
+      updatedHtml =
+        input.html.slice(0, outerRange.start) +
+        newOuterSection +
+        input.html.slice(outerRange.end);
+    } else if (outerRange) {
+      updatedHtml =
+        input.html.slice(0, outerRange.start) +
+        result.html +
+        input.html.slice(outerRange.end);
+    } else {
+      updatedHtml = result.html;
+    }
+
+    return { html: updatedHtml, css: result.css };
   }
 }

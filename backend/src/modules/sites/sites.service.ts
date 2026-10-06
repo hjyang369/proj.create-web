@@ -336,6 +336,7 @@ export class SitesService {
       pageOrder: number;
       pageType: string;
       sectionIndex: number;
+      innerSectionIndex?: number;
       request: string;
       html: string;
       css: string;
@@ -362,6 +363,7 @@ export class SitesService {
         html: dto.html,
         css: dto.css,
         sectionIndex: dto.sectionIndex,
+        innerSectionIndex: dto.innerSectionIndex,
         request: dto.request,
         elementHtml: dto.elementHtml,
         imageUrl: dto.imageUrl,

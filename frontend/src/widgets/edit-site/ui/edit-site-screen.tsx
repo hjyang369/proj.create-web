@@ -168,10 +168,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         event.data !== null &&
         event.data.type === "crep-click"
       ) {
-        const { pageOrder, sectionIndex, tagName, preview: text, elementHtml } =
+        const { pageOrder, sectionIndex, innerSectionIndex, tagName, preview: text, elementHtml } =
           event.data as {
             pageOrder: number;
             sectionIndex: number;
+            innerSectionIndex: number;
             tagName: string;
             preview: string;
             elementHtml: string;
@@ -179,7 +180,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         if (!editingRef.current) {
           return;
         }
-        setSelectedComponent({ pageOrder, sectionIndex, tagName, preview: text, elementHtml });
+        setSelectedComponent({ pageOrder, sectionIndex, innerSectionIndex, tagName, preview: text, elementHtml });
         setEditRequest("");
         setEditError(null);
         setUploadedImageUrl(null);
@@ -238,6 +239,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         pageOrder: selectedComponent.pageOrder,
         pageType: page.pageType,
         sectionIndex: selectedComponent.sectionIndex,
+        innerSectionIndex: selectedComponent.innerSectionIndex >= 0
+          ? selectedComponent.innerSectionIndex
+          : undefined,
         html: page.html,
         css: page.css,
         elementHtml: selectedComponent.elementHtml,

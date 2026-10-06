@@ -12,6 +12,12 @@ export class EditComponentDto {
   @Min(0, { message: "sectionIndex는 0 이상이어야 합니다." })
   sectionIndex: number;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "innerSectionIndex는 정수여야 합니다." })
+  @Min(0, { message: "innerSectionIndex는 0 이상이어야 합니다." })
+  innerSectionIndex?: number;
+
   @IsString({ message: "request는 문자열이어야 합니다." })
   @MinLength(1, { message: "수정 요청을 입력해 주세요." })
   request: string;
