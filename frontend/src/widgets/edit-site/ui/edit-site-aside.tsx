@@ -100,12 +100,18 @@ function ForwardIcon() {
   );
 }
 
-function SidebarIcon({ open }: { open: boolean }) {
+function SidebarIcon({
+  open,
+  className = iconClassName,
+}: {
+  open: boolean;
+  className?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className={iconClassName}
+      className={className}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
@@ -159,31 +165,50 @@ export function EditSiteAside({
     return () => window.clearTimeout(timer);
   }, [selectedComponent]);
 
-  const sidebarToggle = (
+  const edgeToggle = (
     <button
       type="button"
       aria-expanded={open}
       aria-label={
         open ? chrome.sidebar.collapseLabel : chrome.sidebar.expandLabel
       }
-      className={iconButtonClassName}
       onClick={onToggle}
+      className={
+        open
+          ? `absolute z-30 flex items-center justify-center
+              top-0 left-1/2 h-5 w-6 -translate-x-1/2 -translate-y-full
+              text-gray-600
+              bg-white border border-b-0 border-gray-300 rounded-t-md
+              hover:bg-gray-100
+              lg:top-1/2 lg:left-0 lg:h-6 lg:w-5
+              lg:-translate-x-full lg:-translate-y-1/2
+              lg:rounded-t-none lg:rounded-l-md lg:border-b lg:border-r-0`
+          : `fixed z-30 flex items-center justify-center
+              bottom-0 left-1/2 h-5 w-6 -translate-x-1/2
+              text-gray-600
+              bg-white border border-b-0 border-gray-300 rounded-t-md
+              hover:bg-gray-100
+              lg:top-1/2 lg:right-0 lg:bottom-auto lg:left-auto lg:h-6 lg:w-5
+              lg:translate-x-0 lg:-translate-y-1/2
+              lg:rounded-t-none lg:rounded-l-md lg:border-b lg:border-r-0`
+      }
     >
-      <SidebarIcon open={open} />
+      <SidebarIcon open={open} className="h-3 w-3" />
     </button>
   );
 
   if (!open) {
-    return <div className="absolute top-4 right-4">{sidebarToggle}</div>;
+    return edgeToggle;
   }
 
   return (
     <aside
-      className="flex shrink-0 flex-col
+      className="relative flex shrink-0 flex-col
         w-full max-h-72
         border-t border-gray-200 bg-gray-50
         lg:w-80 lg:max-h-none lg:border-l lg:border-t-0"
     >
+      {edgeToggle}
       {chrome.controls === "sidebar" ? (
         <div
           className="flex shrink-0 items-center justify-between
@@ -211,7 +236,6 @@ export function EditSiteAside({
             </button>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {sidebarToggle}
             <button
               type="button"
               className={saveButtonClassName}
