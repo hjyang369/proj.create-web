@@ -32,6 +32,12 @@ type EditSiteAsideProps = {
   onImageFile: (file: File) => void;
   onClearImage: () => void;
   onCancelSelection: () => void;
+  onHistoryBack: () => void;
+  onHistoryForward: () => void;
+  canSave: boolean;
+  saving: boolean;
+  saveError: string | null;
+  onSave: () => void;
 };
 
 const iconButtonClassName = `flex shrink-0 items-center justify-center
@@ -45,7 +51,8 @@ const saveButtonClassName = `flex shrink-0 items-center justify-center
   h-10 px-4
   text-sm font-medium whitespace-nowrap text-white
   bg-black rounded-lg
-  hover:bg-gray-900`;
+  hover:bg-gray-900
+  disabled:cursor-not-allowed disabled:bg-gray-300 disabled:hover:bg-gray-300`;
 
 const regenerateButtonClassName = `flex items-center justify-center
   h-10 w-full px-4
@@ -132,6 +139,12 @@ export function EditSiteAside({
   onImageFile,
   onClearImage,
   onCancelSelection,
+  onHistoryBack,
+  onHistoryForward,
+  canSave,
+  saving,
+  saveError,
+  onSave,
 }: EditSiteAsideProps) {
   const editInputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -182,6 +195,7 @@ export function EditSiteAside({
               aria-label={chrome.history.back.label}
               disabled={!chrome.history.back.enabled}
               className={iconButtonClassName}
+              onClick={onHistoryBack}
             >
               <BackIcon />
             </button>
@@ -190,17 +204,28 @@ export function EditSiteAside({
               aria-label={chrome.history.forward.label}
               disabled={!chrome.history.forward.enabled}
               className={iconButtonClassName}
+              onClick={onHistoryForward}
             >
               <ForwardIcon />
             </button>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {sidebarToggle}
-            <button type="button" className={saveButtonClassName}>
-              {chrome.save.label}
+            <button
+              type="button"
+              className={saveButtonClassName}
+              disabled={!canSave}
+              onClick={onSave}
+            >
+              {saving ? "저장 중..." : chrome.save.label}
             </button>
           </div>
         </div>
+      ) : null}
+      {saveError ? (
+        <p role="alert" className="px-4 py-2 text-sm text-gray-800">
+          {saveError}
+        </p>
       ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">

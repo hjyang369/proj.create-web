@@ -7,8 +7,7 @@ import {
   editSiteComponent,
   getMySite,
   regenerateSiteDraft,
-  updateSiteImages,
-  updateSiteInputs,
+  saveSiteDraft,
   uploadSiteImage,
   type SiteEditorDetail,
   type SiteEditorPage,
@@ -19,7 +18,6 @@ import {
   describeEditPageChrome,
   initialSidebarOpen,
 } from "../model/edit-page-layout";
-import { shouldReplaceSiteImages } from "../model/should-replace-site-images";
 import { EditSiteAside, type SelectedComponent } from "./edit-site-aside";
 
 type PreviewState =
@@ -27,6 +25,19 @@ type PreviewState =
   | { kind: "guest" }
   | { kind: "error"; message: string }
   | { kind: "ready"; site: SiteEditorDetail };
+
+function snapshotKey(site: SiteEditorDetail): string {
+  return JSON.stringify({
+    name: site.name,
+    pages: site.pages.map((page) => ({
+      pageType: page.pageType,
+      pageOrder: page.pageOrder,
+      html: page.html,
+      css: page.css,
+    })),
+    inputs: site.inputs,
+  });
+}
 
 function previewMessage(preview: PreviewState): string {
   if (preview.kind === "guest") {
@@ -62,12 +73,48 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [editError, setEditError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [siteHistory, setSiteHistory] = useState<SiteEditorDetail[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setSidebarOpen(
       initialSidebarOpen(window.matchMedia("(min-width: 1024px)").matches),
     );
   }, []);
+
+  const canBack = historyIndex > 0 && !saving;
+  const canForward = historyIndex < siteHistory.length - 1 && !saving;
+  const currentSite = historyIndex >= 0 ? siteHistory[historyIndex] : null;
+  const canSave =
+    currentSite != null &&
+    currentSite.inputs != null &&
+    snapshotKey(currentSite) !== savedKey &&
+    !saving &&
+    !regenerating &&
+    !editLoading;
+
+  function pushSiteHistory(site: SiteEditorDetail) {
+    setSiteHistory((prev) => [...prev.slice(0, historyIndex + 1), site]);
+    setHistoryIndex((prev) => prev + 1);
+    setPreview({ kind: "ready", site });
+  }
+
+  function handleHistoryBack() {
+    if (!canBack) return;
+    const nextIndex = historyIndex - 1;
+    setHistoryIndex(nextIndex);
+    setPreview({ kind: "ready", site: siteHistory[nextIndex] });
+  }
+
+  function handleHistoryForward() {
+    if (!canForward) return;
+    const nextIndex = historyIndex + 1;
+    setHistoryIndex(nextIndex);
+    setPreview({ kind: "ready", site: siteHistory[nextIndex] });
+  }
 
   useEffect(() => {
     if (!ready) {
@@ -91,6 +138,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     getMySite(id)
       .then((site) => {
         if (!cancelled) {
+          setSiteHistory([site]);
+          setHistoryIndex(0);
+          setSavedKey(snapshotKey(site));
           setPreview({ kind: "ready", site });
         }
       })
@@ -163,7 +213,8 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       preview.kind !== "ready" ||
       !selectedComponent ||
       !editRequest.trim() ||
-      editLoading
+      editLoading ||
+      saving
     ) {
       return;
     }
@@ -171,13 +222,24 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     const id = Number(siteId);
     if (!Number.isInteger(id) || id <= 0) return;
 
+    const page = preview.site.pages.find(
+      (item) => item.pageOrder === selectedComponent.pageOrder,
+    );
+    if (!page) {
+      setEditError("수정할 페이지를 찾지 못했습니다.");
+      return;
+    }
+
     setEditLoading(true);
     setEditError(null);
 
     try {
       const updatedPage = await editSiteComponent(id, {
         pageOrder: selectedComponent.pageOrder,
+        pageType: page.pageType,
         sectionIndex: selectedComponent.sectionIndex,
+        html: page.html,
+        css: page.css,
         elementHtml: selectedComponent.elementHtml,
         imageUrl: uploadedImageUrl ?? undefined,
         request: editRequest.trim(),
@@ -187,7 +249,8 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       const updatedPages: typeof preview.site.pages = preview.site.pages.map(
         (p) => (p.pageOrder === updatedPage.pageOrder ? (updatedPage as SiteEditorPage) : p),
       );
-      setPreview({ kind: "ready", site: { ...preview.site, pages: updatedPages } });
+      const updatedSite = { ...preview.site, pages: updatedPages };
+      pushSiteHistory(updatedSite);
       setEditRequest("");
       setUploadedImageUrl(null);
       setSelectedComponent(null);
@@ -222,7 +285,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   }
 
   function openRegenerateForm() {
-    if (preview.kind !== "ready" || regenerating || !preview.site.inputs) {
+    if (preview.kind !== "ready" || regenerating || saving || !preview.site.inputs) {
       return;
     }
 
@@ -231,7 +294,12 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   }
 
   async function submitRegenerateForm(submission: SiteFormSubmit) {
-    if (preview.kind !== "ready" || !preview.site.inputs || regenerating) {
+    if (
+      preview.kind !== "ready" ||
+      !preview.site.inputs ||
+      regenerating ||
+      saving
+    ) {
       return;
     }
 
@@ -240,35 +308,18 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       return;
     }
 
-    const inputs = preview.site.inputs;
     setRegenerating(true);
     setRegenerateError(null);
 
     try {
-      await updateSiteInputs(id, submission.values);
-      if (
-        shouldReplaceSiteImages(
-          {
-            logoUrl: inputs.logo?.url ?? null,
-            photoUrls: inputs.photos.map((photo) => photo.url),
-          },
-          {
-            hasNewLogo: submission.logoFile != null,
-            keepExistingLogo: submission.keepExistingLogo,
-            newPhotoCount: submission.photoFiles.length,
-            keptPhotoUrls: submission.keptPhotoUrls,
-          },
-        )
-      ) {
-        await updateSiteImages(id, {
-          keepExistingLogo: submission.keepExistingLogo,
-          keptPhotoUrls: submission.keptPhotoUrls,
-          logoFile: submission.logoFile,
-          photoFiles: submission.photoFiles,
-        });
-      }
-      const site = await regenerateSiteDraft(id);
-      setPreview({ kind: "ready", site });
+      const site = await regenerateSiteDraft(id, {
+        values: submission.values,
+        keepExistingLogo: submission.keepExistingLogo,
+        keptPhotoUrls: submission.keptPhotoUrls,
+        logoFile: submission.logoFile,
+        photoFiles: submission.photoFiles,
+      });
+      pushSiteHistory(site);
       setFormOpen(false);
     } catch (error: unknown) {
       const message =
@@ -278,6 +329,40 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       setRegenerateError(message);
     } finally {
       setRegenerating(false);
+    }
+  }
+
+  async function saveCurrentDraft() {
+    if (!canSave || preview.kind !== "ready" || !currentSite?.inputs) {
+      return;
+    }
+
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return;
+    }
+
+    const index = historyIndex;
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const saved = await saveSiteDraft(id, {
+        pages: currentSite.pages,
+        inputs: currentSite.inputs,
+      });
+      setSiteHistory((prev) =>
+        prev.map((item, itemIndex) => (itemIndex === index ? saved : item)),
+      );
+      setHistoryIndex(index);
+      setPreview({ kind: "ready", site: saved });
+      setSavedKey(snapshotKey(saved));
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "저장하지 못했습니다.";
+      setSaveError(message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -306,11 +391,19 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       </section>
       <EditSiteAside
         open={sidebarOpen}
-        chrome={chrome}
+        chrome={{
+          ...chrome,
+          history: {
+            back: { ...chrome.history.back, enabled: canBack },
+            forward: { ...chrome.history.forward, enabled: canForward },
+          },
+        }}
         onToggle={() => setSidebarOpen((open) => !open)}
         editing={editing}
         onChangeEditing={changePreviewMode}
-        canRegenerate={preview.kind === "ready" && preview.site.inputs != null}
+        canRegenerate={
+          preview.kind === "ready" && preview.site.inputs != null && !saving
+        }
         regenerating={regenerating}
         regenerateError={regenerateError}
         onRegenerate={openRegenerateForm}
@@ -330,6 +423,12 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
           setEditError(null);
           setUploadedImageUrl(null);
         }}
+        onHistoryBack={handleHistoryBack}
+        onHistoryForward={handleHistoryForward}
+        canSave={canSave}
+        saving={saving}
+        saveError={saveError}
+        onSave={() => void saveCurrentDraft()}
       />
       {formOpen && preview.kind === "ready" && preview.site.inputs ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-6">

@@ -395,6 +395,124 @@ export class DrizzleSitesStore implements SitesStore {
     return toCreateSiteRecord(input, images);
   }
 
+  async saveOwnedDraft(
+    userId: number,
+    siteId: number,
+    draft: {
+      inputs: Omit<CreateSiteRecord, "userId" | "logo" | "photos">;
+      images: {
+        logo: CreateSiteRecord["logo"];
+        photos: CreateSiteRecord["photos"];
+      };
+      pages: GeneratedSitePage[];
+    },
+  ): Promise<boolean> {
+    if (draft.pages.length === 0) {
+      throw new Error("생성된 페이지가 없습니다.");
+    }
+
+    const now = new Date();
+
+    return this.db.transaction(async (tx) => {
+      const owned = await tx
+        .select({ id: sites.id })
+        .from(sites)
+        .innerJoin(siteInputs, eq(siteInputs.siteId, sites.id))
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+        .limit(1);
+
+      if (!owned[0]) {
+        return false;
+      }
+
+      await tx
+        .update(siteInputs)
+        .set({
+          businessType: draft.inputs.businessType,
+          companyName: draft.inputs.name,
+          oneLineIntro: draft.inputs.oneLineIntro,
+          description: draft.inputs.description,
+          address: draft.inputs.address,
+          phone: draft.inputs.phone,
+          email: draft.inputs.email,
+          purpose: draft.inputs.purpose,
+          targetCustomer: draft.inputs.targetCustomer,
+          mainColor: draft.inputs.mainColor,
+          atmosphere: draft.inputs.atmosphere,
+          extraRequest: draft.inputs.extraRequest,
+          pageCount: draft.inputs.pageCount,
+          pageComponents: draft.inputs.pageComponents,
+          referenceUrl: draft.inputs.referenceUrl,
+          optionalLinks: draft.inputs.optionalLinks,
+          updatedAt: now,
+        })
+        .where(eq(siteInputs.siteId, siteId));
+
+      await tx.delete(siteImages).where(eq(siteImages.siteId, siteId));
+
+      const imageRows: Array<{
+        siteId: number;
+        type: "logo" | "site_image";
+        url: string;
+        originalName: string;
+        order: number;
+        createdAt: Date;
+      }> = [];
+
+      if (draft.images.logo) {
+        imageRows.push({
+          siteId,
+          type: "logo",
+          url: draft.images.logo.url,
+          originalName: draft.images.logo.originalName,
+          order: 0,
+          createdAt: now,
+        });
+      }
+
+      draft.images.photos.forEach((photo, index) => {
+        imageRows.push({
+          siteId,
+          type: "site_image",
+          url: photo.url,
+          originalName: photo.originalName,
+          order: index + 1,
+          createdAt: now,
+        });
+      });
+
+      if (imageRows.length > 0) {
+        await tx.insert(siteImages).values(imageRows);
+      }
+
+      await tx.delete(sitePages).where(eq(sitePages.siteId, siteId));
+      await tx.insert(sitePages).values(
+        draft.pages.map((page) => ({
+          siteId,
+          pageType: page.pageType,
+          pageOrder: page.pageOrder,
+          componentData: {
+            html: page.html,
+            css: page.css,
+          },
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+
+      await tx
+        .update(sites)
+        .set({
+          name: draft.inputs.name,
+          status: "draft",
+          updatedAt: now,
+        })
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)));
+
+      return true;
+    });
+  }
+
   async replaceGeneratedPages(
     siteId: number,
     pages: GeneratedSitePage[],

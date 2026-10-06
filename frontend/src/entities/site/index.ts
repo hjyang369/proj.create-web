@@ -1,5 +1,6 @@
 export { getMySite } from "./api/get-my-site";
 export { regenerateSiteDraft } from "./api/regenerate-site-draft";
+export { saveSiteDraft } from "./api/save-site-draft";
 export { updateSiteImages } from "./api/update-site-images";
 export { updateSiteInputs } from "./api/update-site-inputs";
 export { editSiteComponent } from "./api/edit-site-component";

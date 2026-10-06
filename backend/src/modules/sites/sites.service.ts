@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
@@ -267,6 +268,13 @@ export class SitesService {
   async regenerateDraft(
     userId: number,
     siteId: number,
+    dto: CreateSiteDto,
+    change: {
+      keepExistingLogo: boolean;
+      keptPhotoUrls: string[];
+      logoFile: Express.Multer.File | undefined;
+      photoFiles: Express.Multer.File[];
+    },
   ): Promise<SiteEditorDetail> {
     if (!Number.isInteger(userId) || userId <= 0) {
       throw new UnauthorizedException("로그인이 필요합니다.");
@@ -276,10 +284,31 @@ export class SitesService {
       throw new NotFoundException("사이트를 찾을 수 없습니다.");
     }
 
-    const record = await this.sites.findOwnedGenerationInput(userId, siteId);
-    if (!record || record.userId !== userId) {
+    const current = await this.sites.findOwnedGenerationInput(userId, siteId);
+    if (!current || current.userId !== userId) {
       throw new NotFoundException("사이트를 찾을 수 없습니다.");
     }
+
+    const logo = change.logoFile
+      ? await saveFile(change.logoFile, "logos")
+      : null;
+    const photos: Array<{ url: string; originalName: string }> = [];
+    for (const file of change.photoFiles) {
+      photos.push(await saveFile(file, "photos"));
+    }
+
+    const images = planSiteImages(current, {
+      keepExistingLogo: change.keepExistingLogo,
+      keptPhotoUrls: change.keptPhotoUrls,
+      logo,
+      photos,
+    });
+    const record: CreateSiteRecord = {
+      userId,
+      ...toInputFields(dto),
+      logo: images.logo,
+      photos: images.photos,
+    };
 
     let pages;
     try {
@@ -292,8 +321,6 @@ export class SitesService {
       throw new BadGatewayException(message);
     }
 
-    await this.sites.replaceGeneratedPages(siteId, pages);
-
     return {
       id: siteId,
       name: record.name,
@@ -305,7 +332,16 @@ export class SitesService {
   async editComponent(
     userId: number,
     siteId: number,
-    dto: { pageOrder: number; sectionIndex: number; request: string; elementHtml?: string; imageUrl?: string },
+    dto: {
+      pageOrder: number;
+      pageType: string;
+      sectionIndex: number;
+      request: string;
+      html: string;
+      css: string;
+      elementHtml?: string;
+      imageUrl?: string;
+    },
   ): Promise<StoredSitePageContent> {
     if (!Number.isInteger(userId) || userId <= 0) {
       throw new UnauthorizedException("로그인이 필요합니다.");
@@ -320,16 +356,11 @@ export class SitesService {
       throw new NotFoundException("사이트를 찾을 수 없습니다.");
     }
 
-    const page = site.pages.find((p) => p.pageOrder === dto.pageOrder);
-    if (!page) {
-      throw new NotFoundException("해당 페이지를 찾을 수 없습니다.");
-    }
-
     let updated: { html: string; css: string };
     try {
       updated = await this.generator.editComponent({
-        html: page.html,
-        css: page.css,
+        html: dto.html,
+        css: dto.css,
         sectionIndex: dto.sectionIndex,
         request: dto.request,
         elementHtml: dto.elementHtml,
@@ -343,17 +374,99 @@ export class SitesService {
       throw new BadGatewayException(message);
     }
 
-    const saved = await this.sites.updateOwnedPageContent(
-      userId,
-      siteId,
-      dto.pageOrder,
-      updated,
-    );
-    if (!saved) {
-      throw new NotFoundException("페이지를 저장하지 못했습니다.");
+    return {
+      pageType: dto.pageType,
+      pageOrder: dto.pageOrder,
+      html: updated.html,
+      css: updated.css,
+    };
+  }
+
+  async saveDraft(
+    userId: number,
+    siteId: number,
+    draft: {
+      pages: StoredSitePageContent[];
+      inputs: SiteInputForm;
+    },
+  ): Promise<SiteEditorDetail> {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
     }
 
-    return saved;
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    if (draft.pages.length === 0) {
+      throw new BadRequestException("저장할 페이지가 없습니다.");
+    }
+
+    const images = [draft.inputs.logo, ...draft.inputs.photos].filter(
+      (image): image is { url: string; originalName: string } => image != null,
+    );
+    for (const image of images) {
+      if (
+        !image.url.startsWith("/uploads/") ||
+        image.url.includes("..") ||
+        image.url.includes("\\")
+      ) {
+        throw new BadRequestException("이미지 주소가 올바르지 않습니다.");
+      }
+    }
+
+    const owned = await this.sites.findOwnedGenerationInput(userId, siteId);
+    if (!owned || owned.userId !== userId) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    const pageCount = Number.parseInt(String(draft.inputs.pageCount), 10);
+    const fields = toInputFields({
+      industry: draft.inputs.industry,
+      name: draft.inputs.name,
+      tagline: draft.inputs.tagline,
+      description: draft.inputs.description,
+      address: draft.inputs.address,
+      phone: draft.inputs.phone,
+      email: draft.inputs.email,
+      purpose: draft.inputs.purpose,
+      targetCustomer: draft.inputs.targetCustomer,
+      mainColor: draft.inputs.mainColor,
+      mood: draft.inputs.mood as CreateSiteDto["mood"],
+      pageCount: Number.isInteger(pageCount) && pageCount > 0 ? pageCount : 1,
+      selectedPages: draft.inputs.selectedPages,
+      blogLink: draft.inputs.blogLink,
+      websiteLink: draft.inputs.websiteLink,
+      instagramLink: draft.inputs.instagramLink,
+      youtubeLink: draft.inputs.youtubeLink,
+      referenceLink: draft.inputs.referenceLink,
+      extraRequest: draft.inputs.extraRequest,
+    });
+    const nextImages = {
+      logo: draft.inputs.logo,
+      photos: draft.inputs.photos,
+    };
+    const saved = await this.sites.saveOwnedDraft(userId, siteId, {
+      inputs: fields,
+      images: nextImages,
+      pages: draft.pages,
+    });
+    if (!saved) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    return {
+      id: siteId,
+      name: fields.name,
+      pages: [...draft.pages].sort(
+        (left, right) => left.pageOrder - right.pageOrder,
+      ),
+      inputs: toSiteInputForm({
+        userId,
+        ...fields,
+        ...nextImages,
+      }),
+    };
   }
 
   async uploadSiteImage(

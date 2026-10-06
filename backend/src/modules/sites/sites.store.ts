@@ -97,6 +97,18 @@ export type SitesStore = {
     siteId: number,
     pages: GeneratedSitePage[],
   ) => Promise<void>;
+  saveOwnedDraft: (
+    userId: number,
+    siteId: number,
+    draft: {
+      inputs: Omit<CreateSiteRecord, "userId" | "logo" | "photos">;
+      images: {
+        logo: CreateSiteRecord["logo"];
+        photos: CreateSiteRecord["photos"];
+      };
+      pages: GeneratedSitePage[];
+    },
+  ) => Promise<boolean>;
   updateOwnedPageContent: (
     userId: number,
     siteId: number,

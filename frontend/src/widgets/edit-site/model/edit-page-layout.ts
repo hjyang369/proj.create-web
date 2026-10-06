@@ -3,8 +3,8 @@ export type EditPageChrome = {
   sidebarSide: "right";
   controls: "sidebar";
   history: {
-    back: { label: "뒤로가기"; enabled: false };
-    forward: { label: "앞으로가기"; enabled: false };
+    back: { label: "뒤로가기"; enabled: boolean };
+    forward: { label: "앞으로가기"; enabled: boolean };
   };
   save: { label: "저장하기" };
   regenerate: {

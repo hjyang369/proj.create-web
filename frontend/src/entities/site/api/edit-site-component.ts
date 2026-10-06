@@ -3,8 +3,11 @@ import type { SiteEditorPage } from "./get-my-site";
 
 export type EditComponentRequest = {
   pageOrder: number;
+  pageType: string;
   sectionIndex: number;
   request: string;
+  html: string;
+  css: string;
   elementHtml?: string;
   imageUrl?: string;
 };

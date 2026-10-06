@@ -369,17 +369,32 @@ const storedGenerationInput: CreateSiteRecord = {
   photos: [],
 };
 
+const imageChange = {
+  keepExistingLogo: true,
+  keptPhotoUrls: [] as string[],
+  logoFile: undefined,
+  photoFiles: [] as Express.Multer.File[],
+};
+
 describe('SitesService.regenerateDraft', () => {
-  it('저장된 입력으로 AI를 다시 호출하고 페이지를 초안으로 바꾼다', async () => {
+  it('제출한 입력으로 페이지를 만들지만 데이터베이스에는 저장하지 않는다', async () => {
     let generatedFrom: CreateSiteRecord | undefined;
-    let replaced: { siteId: number; pages: GeneratedSitePage[] } | undefined;
+    let replaced = false;
     const service = new SitesService(
       {
         async findOwnedGenerationInput() {
           return storedGenerationInput;
         },
-        async replaceGeneratedPages(siteId, pages) {
-          replaced = { siteId, pages };
+        async replaceGeneratedPages() {
+          replaced = true;
+        },
+        async updateOwnedInputs() {
+          replaced = true;
+          return true;
+        },
+        async replaceOwnedImages() {
+          replaced = true;
+          return true;
         },
       } as SitesStore,
       {
@@ -387,13 +402,40 @@ describe('SitesService.regenerateDraft', () => {
           generatedFrom = input;
           return [generatedPage];
         },
+        async editComponent() {
+          return { html: '', css: '' };
+        },
       },
     );
 
-    await expect(service.regenerateDraft(1, 4)).resolves.toEqual({
+    const submitted = { ...createDto, name: '저녁커피', tagline: '밤에 마시는 커피' };
+
+    await expect(
+      service.regenerateDraft(1, 4, submitted, imageChange),
+    ).resolves.toEqual({
       id: 4,
-      name: '카페',
-      inputs: toSiteInputForm(storedGenerationInput),
+      name: '저녁커피',
+      inputs: toSiteInputForm({
+        userId: 1,
+        name: '저녁커피',
+        businessType: null,
+        oneLineIntro: '밤에 마시는 커피',
+        description: null,
+        address: null,
+        phone: null,
+        email: null,
+        purpose: 'company_intro',
+        targetCustomer: null,
+        mainColor: null,
+        atmosphere: 'warm',
+        extraRequest: '로고를 크게',
+        pageCount: 1,
+        pageComponents: null,
+        referenceUrl: null,
+        optionalLinks: null,
+        logo: storedGenerationInput.logo,
+        photos: [],
+      }),
       pages: [
         {
           pageType: 'company_intro',
@@ -403,8 +445,10 @@ describe('SitesService.regenerateDraft', () => {
         },
       ],
     });
-    expect(generatedFrom).toEqual(storedGenerationInput);
-    expect(replaced).toEqual({ siteId: 4, pages: [generatedPage] });
+    expect(generatedFrom?.name).toBe('저녁커피');
+    expect(generatedFrom?.oneLineIntro).toBe('밤에 마시는 커피');
+    expect(generatedFrom?.logo).toEqual(storedGenerationInput.logo);
+    expect(replaced).toBe(false);
   });
 
   it('저장된 입력이 없으면 페이지를 바꾸지 않는다', async () => {
@@ -425,9 +469,9 @@ describe('SitesService.regenerateDraft', () => {
       },
     );
 
-    await expect(service.regenerateDraft(1, 4)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.regenerateDraft(1, 4, createDto, imageChange),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(replaced).toBe(false);
   });
 
@@ -449,9 +493,9 @@ describe('SitesService.regenerateDraft', () => {
       },
     );
 
-    await expect(service.regenerateDraft(1, 4)).rejects.toBeInstanceOf(
-      BadGatewayException,
-    );
+    await expect(
+      service.regenerateDraft(1, 4, createDto, imageChange),
+    ).rejects.toBeInstanceOf(BadGatewayException);
     expect(replaced).toBe(false);
   });
 
@@ -467,9 +511,9 @@ describe('SitesService.regenerateDraft', () => {
       unusedGenerator,
     );
 
-    await expect(service.regenerateDraft(0, 4)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(
+      service.regenerateDraft(0, 4, createDto, imageChange),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(called).toBe(false);
   });
 });
@@ -648,5 +692,115 @@ describe('SitesService.updateImages', () => {
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(replaced).toBe(false);
+  });
+});
+
+describe('SitesService.editComponent', () => {
+  it('화면의 페이지를 고치고 데이터베이스에는 저장하지 않는다', async () => {
+    let saved = false;
+    let editedHtml = '';
+    const service = new SitesService(
+      {
+        async findOwnedWithPages() {
+          return {
+            id: 4,
+            userId: 1,
+            name: '카페',
+            pages: [
+              {
+                pageType: 'company_intro',
+                pageOrder: 1,
+                html: '<main>저장본</main>',
+                css: 'main{}',
+              },
+            ],
+          };
+        },
+        async updateOwnedPageContent() {
+          saved = true;
+          return null;
+        },
+      } as SitesStore,
+      {
+        async generatePages() {
+          return [];
+        },
+        async editComponent(input) {
+          editedHtml = input.html;
+          return { html: '<main>수정본</main>', css: 'main{color:red}' };
+        },
+      },
+    );
+
+    await expect(
+      service.editComponent(1, 4, {
+        pageOrder: 1,
+        pageType: 'company_intro',
+        sectionIndex: 0,
+        request: '제목을 바꿔',
+        html: '<main>화면</main>',
+        css: 'main{}',
+      }),
+    ).resolves.toEqual({
+      pageType: 'company_intro',
+      pageOrder: 1,
+      html: '<main>수정본</main>',
+      css: 'main{color:red}',
+    });
+    expect(editedHtml).toBe('<main>화면</main>');
+    expect(saved).toBe(false);
+  });
+});
+
+describe('SitesService.saveDraft', () => {
+  it('현재 페이지와 재생성 폼을 함께 저장한다', async () => {
+    let saved:
+      | {
+          userId: number;
+          siteId: number;
+          inputs: Omit<CreateSiteRecord, 'userId' | 'logo' | 'photos'>;
+          images: {
+            logo: CreateSiteRecord['logo'];
+            photos: CreateSiteRecord['photos'];
+          };
+          pages: GeneratedSitePage[];
+        }
+      | undefined;
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          return storedGenerationInput;
+        },
+        async saveOwnedDraft(userId, siteId, draft) {
+          saved = { userId, siteId, ...draft };
+          return true;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    const inputs = toSiteInputForm({
+      ...storedGenerationInput,
+      name: '저녁커피',
+      oneLineIntro: '밤에 마시는 커피',
+    });
+
+    await expect(
+      service.saveDraft(1, 4, {
+        pages: [generatedPage],
+        inputs,
+      }),
+    ).resolves.toEqual({
+      id: 4,
+      name: '저녁커피',
+      pages: [generatedPage],
+      inputs,
+    });
+    expect(saved?.userId).toBe(1);
+    expect(saved?.siteId).toBe(4);
+    expect(saved?.inputs.name).toBe('저녁커피');
+    expect(saved?.inputs.oneLineIntro).toBe('밤에 마시는 커피');
+    expect(saved?.images.logo).toEqual(storedGenerationInput.logo);
+    expect(saved?.pages).toEqual([generatedPage]);
   });
 });

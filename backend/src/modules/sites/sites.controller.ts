@@ -20,6 +20,8 @@ import { SitesService } from "./sites.service.js";
 import { CreateSiteDto } from "./dto/create-site.dto.js";
 import { UpdateSiteImagesDto } from "./dto/update-site-images.dto.js";
 import { EditComponentDto } from "./dto/edit-component.dto.js";
+import { RegenerateSiteDto } from "./dto/regenerate-site.dto.js";
+import { SaveSiteDraftDto } from "./dto/save-site-draft.dto.js";
 
 const multerOptions = {
   storage: memoryStorage(), // 파일을 메모리에 올려 서비스에서 직접 저장
@@ -89,11 +91,66 @@ export class SitesController {
 
   @Post(":id/regenerate")
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: "logo", maxCount: 1 },
+        { name: "photos", maxCount: 20 },
+      ],
+      multerOptions,
+    ),
+  )
   regenerate(
     @Req() request: { user: AuthUser },
     @Param("id", ParseIntPipe) id: number,
+    @Body() dto: RegenerateSiteDto,
+    @UploadedFiles()
+    files?: {
+      logo?: Express.Multer.File[];
+      photos?: Express.Multer.File[];
+    },
   ) {
-    return this.sitesService.regenerateDraft(request.user.id, id);
+    return this.sitesService.regenerateDraft(request.user.id, id, dto, {
+      keepExistingLogo: dto.keepExistingLogo,
+      keptPhotoUrls: dto.keptPhotoUrls ?? [],
+      logoFile: files?.logo?.[0],
+      photoFiles: files?.photos ?? [],
+    });
+  }
+
+  @Post(":id/save")
+  @UseGuards(JwtAuthGuard)
+  save(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: SaveSiteDraftDto,
+  ) {
+    return this.sitesService.saveDraft(request.user.id, id, {
+      pages: dto.pages,
+      inputs: {
+        industry: dto.inputs.industry,
+        name: dto.inputs.name,
+        tagline: dto.inputs.tagline,
+        description: dto.inputs.description,
+        address: dto.inputs.address,
+        phone: dto.inputs.phone,
+        email: dto.inputs.email,
+        purpose: dto.inputs.purpose,
+        targetCustomer: dto.inputs.targetCustomer,
+        mainColor: dto.inputs.mainColor,
+        mood: dto.inputs.mood,
+        pageCount: String(dto.inputs.pageCount),
+        selectedPages: dto.inputs.selectedPages,
+        blogLink: dto.inputs.blogLink,
+        websiteLink: dto.inputs.websiteLink,
+        instagramLink: dto.inputs.instagramLink,
+        youtubeLink: dto.inputs.youtubeLink,
+        referenceLink: dto.inputs.referenceLink,
+        extraRequest: dto.inputs.extraRequest,
+        logo: dto.inputs.logo,
+        photos: dto.inputs.photos ?? [],
+      },
+    });
   }
 
   @Post(":id/edit-component")

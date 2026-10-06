@@ -23,4 +23,15 @@ export class EditComponentDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @IsString({ message: "pageType은 문자열이어야 합니다." })
+  @MinLength(1, { message: "페이지 종류가 필요합니다." })
+  pageType: string;
+
+  @IsString({ message: "html은 문자열이어야 합니다." })
+  @MinLength(1, { message: "수정할 페이지 내용이 필요합니다." })
+  html: string;
+
+  @IsString({ message: "css는 문자열이어야 합니다." })
+  css: string;
 }
