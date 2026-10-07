@@ -28,6 +28,10 @@ export type EditPageChrome = {
     previewHint: string;
     previewMessage: string;
   };
+  editLog: {
+    title: string;
+    regenerateLabel: string;
+  };
 };
 
 export function describeEditPageChrome(): EditPageChrome {
@@ -62,6 +66,10 @@ export function describeEditPageChrome(): EditPageChrome {
       previewHint: "버튼과 링크가 그대로 동작합니다.",
       previewMessage:
         "편집이 꺼져 있습니다. 버튼과 링크를 누르면 그대로 동작합니다.",
+    },
+    editLog: {
+      title: "수정 내역",
+      regenerateLabel: "초안으로 재생성",
     },
   };
 }

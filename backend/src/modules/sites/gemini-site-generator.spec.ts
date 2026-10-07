@@ -222,6 +222,40 @@ describe("replaceSectionInHtml", () => {
 });
 
 describe("GeminiSiteGenerator.editComponent", () => {
+  it("화면 동작은 스크립트 없이 만들라고 안내한다", async () => {
+    let capturedSystem = "";
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async ({ system }) => {
+        capturedSystem = system;
+        return JSON.stringify({ html: "<section>수정됨</section>", css: "" });
+      },
+    );
+
+    await generator.editComponent({
+      html: "<section>본문</section>",
+      css: "body{}",
+      sectionIndex: 0,
+      request: "탭 메뉴를 추가해 줘",
+    });
+
+    expect(capturedSystem).toContain('type="radio"');
+    expect(capturedSystem).toContain(":checked");
+    expect(capturedSystem).toContain("1번 탭은 1번 화면");
+    expect(capturedSystem).toContain('<details class="crep-dropdown">');
+    expect(capturedSystem).toContain("<summary>");
+    expect(capturedSystem).toContain('name="crep-accordion-1"');
+    expect(capturedSystem).toContain('id="crep-nav-toggle"');
+    expect(capturedSystem).toContain("crep-carousel");
+    expect(capturedSystem).toContain('role="tooltip"');
+    expect(capturedSystem).toContain(":focus-within");
+    expect(capturedSystem).toContain("crep-switch");
+    expect(capturedSystem).toContain('type="date"');
+    expect(capturedSystem).toContain("<select>");
+    expect(capturedSystem).toContain("<script>");
+    expect(capturedSystem).toContain("onclick");
+  });
+
   it("AI에게 전체 HTML 대신 해당 섹션만 보낸다", async () => {
     let capturedPrompt = "";
     const generator = new GeminiSiteGenerator(

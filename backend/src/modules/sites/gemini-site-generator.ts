@@ -2,7 +2,10 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, type LanguageModelUsage } from "ai";
-import { buildSiteGenerationPrompt } from "./site-generation-prompt.js";
+import {
+  buildSiteGenerationPrompt,
+  CSS_ONLY_TAB_RULES,
+} from "./site-generation-prompt.js";
 import {
   parseSiteGenerationResponse,
   DANGEROUS_HTML,
@@ -329,7 +332,9 @@ Return ONLY a valid JSON object with "html" and "css" keys.
 "html" must contain only the modified section HTML (the section you were given, not the full page).
 "css" must contain the complete updated page CSS.
 Do not wrap the section in any extra tags.
-Do not include any explanation or markdown code fences.`;
+Do not include any explanation or markdown code fences.
+
+${CSS_ONLY_TAB_RULES}`;
 
     const imageContext = input.imageUrl
       ? `\nA new image has been uploaded and is available at this URL: ${input.imageUrl}\nIf the request involves an image, use this URL as the image src.`

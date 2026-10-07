@@ -34,7 +34,7 @@ import {
   describeEditPageChrome,
   initialSidebarOpen,
 } from "../model/edit-page-layout";
-import { EditSiteAside, type SelectedComponent } from "./edit-site-aside";
+import { EditSiteAside, type SelectedComponent, type EditLogEntry } from "./edit-site-aside";
 import { EditSiteManualPanel } from "./edit-site-manual-panel";
 
 /** 우클릭으로 고른, 직접 편집 중인 요소 */
@@ -154,6 +154,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [imageUploading, setImageUploading] = useState(false);
   const [siteHistory, setSiteHistory] = useState<SiteEditorDetail[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [editLog, setEditLog] = useState<EditLogEntry[]>([]);
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -300,8 +301,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     site: SiteEditorDetail,
     options: { redraw: boolean } = { redraw: true },
   ) {
-    setSiteHistory((prev) => [...prev.slice(0, historyIndex + 1), site]);
-    setHistoryIndex((prev) => prev + 1);
+    const newIndex = historyIndex + 1;
+    setSiteHistory((prev) => [...prev.slice(0, newIndex), site]);
+    setHistoryIndex(newIndex);
+    // 현재 위치 이후의 로그 항목은 덮어쓰이므로 제거한다.
+    setEditLog((prev) => prev.filter((entry) => entry.historyIndex < newIndex));
     if (options.redraw) {
       showSite(site);
     } else {
@@ -321,6 +325,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     const nextIndex = historyIndex + 1;
     setHistoryIndex(nextIndex);
     showSite(siteHistory[nextIndex]);
+  }
+
+  function handleEditLogJump(entry: EditLogEntry) {
+    if (entry.historyIndex < 0 || entry.historyIndex >= siteHistory.length) {
+      return;
+    }
+    setHistoryIndex(entry.historyIndex);
+    showSite(siteHistory[entry.historyIndex]);
   }
 
   useEffect(() => {
@@ -711,7 +723,19 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         (p) => (p.pageOrder === updatedPage.pageOrder ? (updatedPage as SiteEditorPage) : p),
       );
       const updatedSite = { ...preview.site, pages: updatedPages };
+      const requestLabel = editRequest.trim();
+      const requestPageOrder = selectedComponent.pageOrder;
       pushSiteHistory(updatedSite);
+      setEditLog((prev) => [
+        {
+          historyIndex: historyIndex + 1,
+          type: "ai-edit",
+          label: requestLabel,
+          pageOrder: requestPageOrder,
+          createdAt: new Date(),
+        },
+        ...prev,
+      ]);
       setEditRequest("");
       setUploadedImageUrl(null);
       setSelectedComponent(null);
@@ -782,6 +806,15 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         photoFiles: submission.photoFiles,
       });
       pushSiteHistory(site);
+      setEditLog((prev) => [
+        {
+          historyIndex: historyIndex + 1,
+          type: "regenerate",
+          label: chrome.editLog.regenerateLabel,
+          createdAt: new Date(),
+        },
+        ...prev,
+      ]);
       setFormOpen(false);
     } catch (error: unknown) {
       const message =
@@ -910,6 +943,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         saving={saving}
         saveError={saveError}
         onSave={() => void saveCurrentDraft()}
+        editLog={editLog}
+        currentHistoryIndex={historyIndex}
+        onEditLogJump={handleEditLogJump}
       />
       {formOpen && preview.kind === "ready" && preview.site.inputs ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-6">

@@ -12,6 +12,17 @@ export type SelectedComponent = {
   elementHtml: string;
 };
 
+export type EditLogEntry = {
+  /** 대응하는 siteHistory 인덱스 */
+  historyIndex: number;
+  type: "ai-edit" | "regenerate";
+  /** AI 요청 문장 또는 고정 문구 */
+  label: string;
+  /** ai-edit일 때만 — 어느 페이지인지 */
+  pageOrder?: number;
+  createdAt: Date;
+};
+
 type EditSiteAsideProps = {
   open: boolean;
   chrome: EditPageChrome;
@@ -41,6 +52,11 @@ type EditSiteAsideProps = {
   saving: boolean;
   saveError: string | null;
   onSave: () => void;
+  /** AI 수정 내역 목록 (최신이 앞) */
+  editLog: EditLogEntry[];
+  /** 현재 보고 있는 historyIndex */
+  currentHistoryIndex: number;
+  onEditLogJump: (entry: EditLogEntry) => void;
 };
 
 const iconButtonClassName = `flex shrink-0 items-center justify-center
@@ -102,6 +118,49 @@ function ForwardIcon() {
   );
 }
 
+function AiEditIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 8h12M8 2v12" />
+      <circle cx="8" cy="8" r="2.5" />
+    </svg>
+  );
+}
+
+function RegenerateIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M13 2.5A6 6 0 1 1 3.5 11" />
+      <path d="M1 7l2.5 4L7 8" />
+    </svg>
+  );
+}
+
+function formatEntryTime(date: Date): string {
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function SidebarIcon({
   open,
   className = iconClassName,
@@ -155,6 +214,9 @@ export function EditSiteAside({
   saving,
   saveError,
   onSave,
+  editLog,
+  currentHistoryIndex,
+  onEditLogJump,
 }: EditSiteAsideProps) {
   const editInputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -442,6 +504,53 @@ export function EditSiteAside({
             {editing ? chrome.sidebar.emptyMessage : chrome.mode.previewMessage}
           </p>
         )}
+        {editLog.length > 0 ? (
+          <div className="border-t border-gray-200 px-4 py-4">
+            <p className="mb-2 text-xs font-medium text-gray-500">
+              {chrome.editLog.title}
+            </p>
+            <ul className="flex flex-col gap-0.5">
+              {editLog.map((entry, idx) => {
+                const isActive = entry.historyIndex === currentHistoryIndex;
+                return (
+                  <li key={idx}>
+                    <button
+                      type="button"
+                      onClick={() => onEditLogJump(entry)}
+                      className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-gray-100 ${
+                        isActive ? "bg-gray-100" : ""
+                      }`}
+                    >
+                      <span className="mt-0.5 shrink-0 text-gray-400">
+                        {entry.type === "regenerate" ? (
+                          <RegenerateIcon />
+                        ) : (
+                          <AiEditIcon />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className={`block truncate text-sm ${
+                            isActive
+                              ? "font-medium text-black"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {entry.type === "regenerate"
+                            ? chrome.editLog.regenerateLabel
+                            : entry.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-gray-400">
+                          {formatEntryTime(entry.createdAt)}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </div>
     </aside>
   );
