@@ -3,7 +3,31 @@ import { describe, it } from "node:test";
 import {
   buildEditablePreviewDocument,
   buildSitePreviewDocument,
+  toPreviewAssetUrl,
+  toPreviewHref,
 } from "./site-preview.ts";
+
+describe("toPreviewHref / toPreviewAssetUrl", () => {
+  it("사이트 안 .html 링크는 미리보기에서 앵커로 바꾸고 나머지는 그대로 둔다", () => {
+    assert.equal(toPreviewHref("about.html"), "#");
+    assert.equal(toPreviewHref("./about.html#team"), "#team");
+    assert.equal(toPreviewHref("/index.html#services"), "#services");
+    assert.equal(toPreviewHref("https://example.com/a.html"), "https://example.com/a.html");
+    assert.equal(toPreviewHref("mailto:a@b.com"), "mailto:a@b.com");
+    assert.equal(toPreviewHref("#contact"), "#contact");
+  });
+
+  it("/uploads 경로만 백엔드 주소를 붙인다", () => {
+    assert.equal(
+      toPreviewAssetUrl("/uploads/photos/a.png", "http://localhost:3001/"),
+      "http://localhost:3001/uploads/photos/a.png",
+    );
+    assert.equal(
+      toPreviewAssetUrl("https://example.com/a.png", "http://localhost:3001"),
+      "https://example.com/a.png",
+    );
+  });
+});
 
 describe("buildSitePreviewDocument", () => {
   it("페이지 번호 순으로 html과 css를 한 문서로 합친다", () => {
@@ -120,5 +144,57 @@ describe("buildEditablePreviewDocument", () => {
     assert.ok(prevent > gate);
     assert.match(document, /addEventListener\('click',function\(e\)\{/);
     assert.match(document, /\},true\)/);
+  });
+
+  it("편집 모드에서만 우클릭을 가로채 위치를 부모에게 알린다", () => {
+    const document = buildEditablePreviewDocument([
+      { pageOrder: 1, html: "<a href='#a'>링크</a>", css: "" },
+    ]);
+
+    const start = document.indexOf("addEventListener('contextmenu'");
+    const gate = document.indexOf("if(!editing)return;", start);
+    const prevent = document.indexOf("e.preventDefault();", start);
+    const post = document.indexOf("crep-contextmenu", start);
+
+    assert.ok(start >= 0);
+    assert.ok(gate > start);
+    assert.ok(prevent > gate);
+    assert.ok(post > gate);
+    assert.match(document, /path:path/);
+    assert.match(document, /getComputedStyle\(target\)/);
+    assert.match(document, /fontSize:fontSize/);
+    assert.match(document, /fontWeight:fontWeight/);
+    assert.match(document, /backgroundColor:backgroundColor/);
+    assert.match(document, /backgroundImage:backgroundImage/);
+    assert.match(document, /solePicture/);
+    assert.match(document, /paintedImage/);
+    assert.match(document, /backgroundOwner/);
+    assert.match(document, /backgroundPath:backgroundPath/);
+    const pick = document.indexOf("function pickTarget");
+    assert.match(document, /if\(el\.tagName==='IMG'\)return el;/);
+    const divCheck = document.indexOf("tagName==='DIV'", pick);
+    const closestLink = document.indexOf("closest('a')", pick);
+    assert.ok(divCheck > pick && divCheck < closestLink);
+    const ownerFn = document.indexOf("function backgroundOwner");
+    const imgOwner = document.indexOf("tagName==='IMG'", ownerFn);
+    const closestDiv = document.indexOf("closestDiv", ownerFn);
+    assert.ok(imgOwner > ownerFn && imgOwner < closestDiv);
+    const paintedCall = document.indexOf("paintedImage", ownerFn);
+    assert.ok(closestDiv > ownerFn && closestDiv < paintedCall);
+    assert.match(document, /\/url\\\(\/i/);
+    assert.match(document, /style:styleAttr/);
+    assert.match(document, /getContext\('2d'\)/);
+  });
+
+  it("부모가 보낸 수정값을 그 위치의 요소 하나에만 반영한다", () => {
+    const document = buildEditablePreviewDocument([
+      { pageOrder: 1, html: "<h1>제목</h1>", css: "" },
+    ]);
+
+    assert.match(document, /crep-patch/);
+    assert.match(document, /removeAttribute\('srcset'\)/);
+    assert.match(document, /data\.fontSize/);
+    assert.match(document, /data\.color/);
+    assert.match(document, /data\.style/);
   });
 });

@@ -51,14 +51,14 @@ export function describeEditPageChrome(): EditPageChrome {
     sidebar: {
       title: "편집",
       emptyMessage:
-        "요소를 고르면 여기에서 편집합니다. \n 좌측 마우스 클릭으로 요소 선택, 우측 마우스 클릭으로 요소 개별 편집",
+        "좌클릭: 요소를 골라 AI로 수정합니다.\n우클릭: 글자, 링크, 이미지를 직접 편집합니다.",
       collapseLabel: "사이드바 접기",
       expandLabel: "사이드바 펼치기",
     },
     mode: {
       groupLabel: "편집 모드",
       editLabel: "편집",
-      editHint: "클릭한 요소를 고릅니다.",
+      editHint: "좌클릭은 AI 수정, 우클릭은 직접 편집입니다.",
       previewHint: "버튼과 링크가 그대로 동작합니다.",
       previewMessage:
         "편집이 꺼져 있습니다. 버튼과 링크를 누르면 그대로 동작합니다.",

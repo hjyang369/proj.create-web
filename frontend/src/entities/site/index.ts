@@ -16,7 +16,25 @@ export type { SiteListItem } from "./model/site";
 export {
   buildSitePreviewDocument,
   buildEditablePreviewDocument,
+  toPreviewAssetUrl,
+  toPreviewHref,
 } from "./model/site-preview";
+export {
+  diffElementEdit,
+  editHtmlElement,
+  elementEditOf,
+  isAllowedBackgroundImage,
+  isAllowedEditImageSrc,
+  isAllowedEditLink,
+  isAllowedFontSize,
+  isAllowedFontWeight,
+  isAllowedTextColor,
+  normalizeBackgroundImage,
+  readEditableFromHtml,
+  visibleTextStyle,
+  type EditableElement,
+  type ElementEdit,
+} from "./model/edit-element-html";
 export {
   describeSiteList,
   resolveSiteListState,

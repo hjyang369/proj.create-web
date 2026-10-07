@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { EditPageChrome } from "../model/edit-page-layout";
 
 export type SelectedComponent = {
@@ -23,6 +23,8 @@ type EditSiteAsideProps = {
   regenerateError: string | null;
   onRegenerate: () => void;
   selectedComponent: SelectedComponent | null;
+  /** 우클릭 직접 편집 패널. 있으면 AI 수정 패널 대신 보여준다. */
+  manualPanel: ReactNode;
   editRequest: string;
   onEditRequestChange: (value: string) => void;
   onSubmitEdit: () => void;
@@ -136,6 +138,7 @@ export function EditSiteAside({
   regenerateError,
   onRegenerate,
   selectedComponent,
+  manualPanel,
   editRequest,
   onEditRequestChange,
   onSubmitEdit,
@@ -296,7 +299,9 @@ export function EditSiteAside({
             <p className="mt-3 text-sm text-gray-800">{regenerateError}</p>
           ) : null}
         </div>
-        {editing && selectedComponent ? (
+        {editing && manualPanel ? (
+          manualPanel
+        ) : editing && selectedComponent ? (
           <div className="border-b border-gray-200 px-4 py-4 flex flex-col gap-3">
             <div>
               <p className="text-xs font-medium text-gray-500 mb-1">
@@ -433,7 +438,7 @@ export function EditSiteAside({
             </div>
           </div>
         ) : (
-          <p className="px-4 py-4 text-sm text-gray-500">
+          <p className="whitespace-pre-line px-4 py-4 text-sm text-gray-500">
             {editing ? chrome.sidebar.emptyMessage : chrome.mode.previewMessage}
           </p>
         )}
