@@ -42,19 +42,8 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.system).toContain("data-component-id");
     expect(prompt.system).toContain("<script>");
     expect(prompt.system).toContain("인라인 이벤트 핸들러");
-    expect(prompt.system).toContain('type="radio"');
-    expect(prompt.system).toContain(":checked");
-    expect(prompt.system).toContain("1번 탭은 1번 화면");
-    expect(prompt.system).toContain('<details class="crep-dropdown">');
-    expect(prompt.system).toContain("<summary>");
-    expect(prompt.system).toContain('name="crep-accordion-1"');
-    expect(prompt.system).toContain('id="crep-nav-toggle"');
-    expect(prompt.system).toContain("crep-carousel");
-    expect(prompt.system).toContain('role="tooltip"');
-    expect(prompt.system).toContain(":focus-within");
-    expect(prompt.system).toContain("crep-switch");
-    expect(prompt.system).toContain('type="date"');
-    expect(prompt.system).toContain("<select>");
+    expect(prompt.user).not.toContain('type="radio"');
+    expect(prompt.user).not.toContain("crep-switch");
     expect(prompt.user).toContain('"companyName": "크레프 스튜디오"');
     expect(prompt.user).toContain('"purpose": "서비스 홍보용"');
     expect(prompt.user).toContain('"atmosphere": "모던한"');
@@ -63,6 +52,18 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.user).toContain('"/uploads/logos/logo.webp"');
     expect(prompt.user).toContain('"/uploads/photos/office.webp"');
     expect(prompt.user).not.toContain('"userId"');
+  });
+
+  it("추가 요청에 탭이 있으면 입력 프롬프트에 탭 예시만 넣는다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      extraRequest: "탭 메뉴와 자주 묻는 질문을 넣어 주세요.",
+    });
+
+    expect(prompt.user).toContain('type="radio"');
+    expect(prompt.user).toContain('name="crep-accordion-1"');
+    expect(prompt.user).not.toContain("crep-switch");
+    expect(prompt.system).not.toContain('type="radio"');
   });
 
   it("비어 있는 선택 입력은 프롬프트 데이터에서 제외한다", () => {

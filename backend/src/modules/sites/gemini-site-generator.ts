@@ -2,10 +2,11 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, type LanguageModelUsage } from "ai";
+import { buildSiteGenerationPrompt } from "./site-generation-prompt.js";
 import {
-  buildSiteGenerationPrompt,
-  CSS_ONLY_TAB_RULES,
-} from "./site-generation-prompt.js";
+  interactionRulesFor,
+  resolveInteractionKinds,
+} from "./interaction-rules.js";
 import {
   parseSiteGenerationResponse,
   DANGEROUS_HTML,
@@ -265,7 +266,19 @@ export class GeminiSiteGenerator implements SiteGenerator {
     const model =
       this.config.get<string>("GEMINI_MODEL")?.trim() || DEFAULT_GEMINI_MODEL;
     console.log(`Gemini 모델: ${model}`);
-    const { system, user } = buildSiteGenerationPrompt(input);
+    const kinds = await resolveInteractionKinds(
+      input.extraRequest ?? "",
+      {},
+      ({ system, prompt }) =>
+        this.complete({
+          apiKey,
+          model,
+          system,
+          prompt,
+          timeoutMs: GEMINI_TIMEOUT_MS,
+        }),
+    );
+    const { system, user } = buildSiteGenerationPrompt(input, kinds);
     const text = await this.complete({
       apiKey,
       model,
@@ -327,14 +340,28 @@ export class GeminiSiteGenerator implements SiteGenerator {
         : input.html; // outer 추출 실패 → 전체 HTML 폴백
     }
 
+    const kinds = await resolveInteractionKinds(
+      input.request,
+      { elementHtml: input.elementHtml, imageUrl: input.imageUrl },
+      ({ system, prompt }) =>
+        this.complete({
+          apiKey,
+          model,
+          system,
+          prompt,
+          timeoutMs: GEMINI_TIMEOUT_MS,
+        }),
+    );
+    const rules = interactionRulesFor(kinds);
+
     const system = `You are a web developer editing a single section of a website page.
 Return ONLY a valid JSON object with "html" and "css" keys.
 "html" must contain only the modified section HTML (the section you were given, not the full page).
 "css" must contain the complete updated page CSS.
 Do not wrap the section in any extra tags.
 Do not include any explanation or markdown code fences.
-
-${CSS_ONLY_TAB_RULES}`;
+html 안에 <style>, <script>, onclick 같은 인라인 이벤트 핸들러, javascript: URL을 넣지 마세요.
+화면 모양은 css 필드에만 작성하세요.`;
 
     const imageContext = input.imageUrl
       ? `\nA new image has been uploaded and is available at this URL: ${input.imageUrl}\nIf the request involves an image, use this URL as the image src.`
@@ -351,7 +378,7 @@ Current page CSS:
 ${input.css}
 ${elementContext}${imageContext}
 User's modification request: ${input.request}
-
+${rules ? `\n이 요청에 필요한 동작만 아래 방식으로 구현하세요.\n${rules}\n` : ""}
 Return a JSON object like: {"html":"...","css":"..."}
 "html" = the modified section HTML only (not the full page)
 "css" = the complete updated page CSS`;

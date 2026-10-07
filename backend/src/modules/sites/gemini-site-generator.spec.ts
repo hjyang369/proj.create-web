@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ConfigService } from "@nestjs/config";
-import type { LanguageModelUsage } from "ai";
 import {
   DEFAULT_GEMINI_MODEL,
   GeminiSiteGenerator,
   describeGeminiError,
-  geminiRequestOptions,
-  logGeminiTokenUsage,
   splitHtmlSections,
   replaceSectionInHtml,
 } from "./gemini-site-generator.js";
@@ -104,41 +101,6 @@ describe("describeGeminiError", () => {
   });
 });
 
-describe("geminiRequestOptions", () => {
-  it("실패하면 다시 보내지 않는다", () => {
-    expect(geminiRequestOptions(90_000).maxRetries).toBe(0);
-  });
-});
-
-describe("logGeminiTokenUsage", () => {
-  it("입력, 출력, 전체 토큰을 로그에 남긴다", () => {
-    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const usage: LanguageModelUsage = {
-      inputTokens: 120,
-      outputTokens: 80,
-      totalTokens: 200,
-      inputTokenDetails: {
-        noCacheTokens: 120,
-        cacheReadTokens: undefined,
-        cacheWriteTokens: undefined,
-      },
-      outputTokenDetails: {
-        textTokens: 80,
-        reasoningTokens: undefined,
-      },
-    };
-
-    logGeminiTokenUsage(usage);
-
-    expect(spy).toHaveBeenCalledWith("Gemini 토큰", {
-      inputTokens: 120,
-      outputTokens: 80,
-      totalTokens: 200,
-    });
-    spy.mockRestore();
-  });
-});
-
 describe("splitHtmlSections", () => {
   it("최상위 태그를 섹션으로 분리한다", () => {
     const html = "<header>상단</header><section>본문</section><footer>하단</footer>";
@@ -222,12 +184,14 @@ describe("replaceSectionInHtml", () => {
 });
 
 describe("GeminiSiteGenerator.editComponent", () => {
-  it("화면 동작은 스크립트 없이 만들라고 안내한다", async () => {
-    let capturedSystem = "";
+  it("탭 요청의 입력 프롬프트에만 탭 예시를 넣는다", async () => {
+    let calls = 0;
+    let capturedPrompt = "";
     const generator = new GeminiSiteGenerator(
       config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
-      async ({ system }) => {
-        capturedSystem = system;
+      async ({ prompt }) => {
+        calls += 1;
+        capturedPrompt = prompt;
         return JSON.stringify({ html: "<section>수정됨</section>", css: "" });
       },
     );
@@ -239,21 +203,54 @@ describe("GeminiSiteGenerator.editComponent", () => {
       request: "탭 메뉴를 추가해 줘",
     });
 
-    expect(capturedSystem).toContain('type="radio"');
-    expect(capturedSystem).toContain(":checked");
-    expect(capturedSystem).toContain("1번 탭은 1번 화면");
-    expect(capturedSystem).toContain('<details class="crep-dropdown">');
-    expect(capturedSystem).toContain("<summary>");
-    expect(capturedSystem).toContain('name="crep-accordion-1"');
-    expect(capturedSystem).toContain('id="crep-nav-toggle"');
-    expect(capturedSystem).toContain("crep-carousel");
-    expect(capturedSystem).toContain('role="tooltip"');
-    expect(capturedSystem).toContain(":focus-within");
-    expect(capturedSystem).toContain("crep-switch");
-    expect(capturedSystem).toContain('type="date"');
-    expect(capturedSystem).toContain("<select>");
-    expect(capturedSystem).toContain("<script>");
-    expect(capturedSystem).toContain("onclick");
+    expect(calls).toBe(1);
+    expect(capturedPrompt).toContain('type="radio"');
+    expect(capturedPrompt).toContain("1번 탭은 1번 화면");
+    expect(capturedPrompt).not.toContain("crep-switch");
+  });
+
+  it("색만 바꾸는 요청에는 동작 예시를 넣지 않는다", async () => {
+    let capturedPrompt = "";
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async ({ prompt }) => {
+        capturedPrompt = prompt;
+        return JSON.stringify({ html: "<section>수정됨</section>", css: "" });
+      },
+    );
+
+    await generator.editComponent({
+      html: "<section>본문</section>",
+      css: "body{}",
+      sectionIndex: 0,
+      request: "버튼 색만 바꿔 줘",
+    });
+
+    expect(capturedPrompt).not.toContain('type="radio"');
+    expect(capturedPrompt).not.toContain('<details class="crep-dropdown">');
+  });
+
+  it("애매한 요청은 분류 결과가 탭이면 입력 프롬프트에 탭 예시를 넣는다", async () => {
+    const prompts: string[] = [];
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async ({ prompt }) => {
+        prompts.push(prompt);
+        if (prompts.length === 1) return '{"종류":["탭"]}';
+        return JSON.stringify({ html: "<section>수정됨</section>", css: "" });
+      },
+    );
+
+    await generator.editComponent({
+      html: "<section>본문</section>",
+      css: "body{}",
+      sectionIndex: 0,
+      request: "누르면 아래 화면이 바뀌게",
+    });
+
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain('type="radio"');
+    expect(prompts[1]).not.toContain("crep-switch");
   });
 
   it("AI에게 전체 HTML 대신 해당 섹션만 보낸다", async () => {
