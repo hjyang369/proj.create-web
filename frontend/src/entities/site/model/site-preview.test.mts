@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { SITE_INTERACTION_SCRIPT } from "./site-interactions.ts";
 import {
   buildEditablePreviewDocument,
   buildSitePreviewDocument,
@@ -53,16 +54,23 @@ describe("buildSitePreviewDocument", () => {
     assert.match(document, /main \{ color: black; \}/);
   });
 
-  it("script 태그와 css 안의 style 종료는 미리보기 문서 밖으로 새지 않는다", () => {
+  it("이용자 HTML의 script는 빼고, 서비스 동작 스크립트만 넣는다", () => {
     const document = buildSitePreviewDocument([
       {
         pageOrder: 1,
-        html: '<main>안녕<script>alert(1)</script></main>',
+        html: '<main>안녕<script>alert(1)</script><button type="button" onclick="alert(2)" data-action="alert(3)" data-target="x">버튼</button><button type="button" data-action="modal.open" data-target="m">열기</button><button type="button" data-action="tabs.select" data-target="tab-price">가격</button><a href="javascript:alert(4)">링크</a></main>',
         css: "a {}</style><script>alert(1)</script>",
       },
     ]);
 
-    assert.equal(document.toLowerCase().includes("<script"), false);
+    assert.equal(document.includes("<script>alert(1)"), false);
+    assert.equal(document.includes("onclick"), false);
+    assert.equal(document.includes("javascript:"), false);
+    assert.equal(document.includes('data-action="alert(3)"'), false);
+    assert.equal(document.includes('data-action="modal.open"'), false);
+    assert.equal(document.includes('data-action="tabs.select"'), true);
+    assert.equal(document.includes(SITE_INTERACTION_SCRIPT), true);
+    assert.equal(document.includes("</style><script>"), false);
     assert.match(document, /안녕/);
   });
 

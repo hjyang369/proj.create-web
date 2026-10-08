@@ -1,5 +1,7 @@
 import type { CreateSiteRecord } from './sites.store.js';
+import { INTERACTION_SYSTEM_RULES } from './interaction-actions.js';
 import {
+  INTERACTION_KIND_ORDER,
   interactionRulesFor,
   matchInteractionKeywords,
   type InteractionKind,
@@ -62,6 +64,9 @@ export function buildSiteGenerationPrompt(
       photoUrls: input.photos.map((photo) => photo.url),
     }),
   };
+  const selected = new Set(kinds);
+  if (input.photos.length >= 2) selected.add("carousel");
+  const attached = INTERACTION_KIND_ORDER.filter((kind) => selected.has(kind));
 
   const system = `당신은 접근성, 반응형 설계, 시맨틱 HTML을 준수하는 전문 웹 디자이너이자 프론트엔드 개발자입니다.
 
@@ -78,6 +83,8 @@ export function buildSiteGenerationPrompt(
 - head에는 charset, viewport, title, meta description을 포함하세요.
 - html 안에 <style>, 외부 stylesheet, <script>, <iframe>, <object>, <embed>, 인라인 이벤트 핸들러, javascript: URL을 넣지 마세요.
 - 각 페이지의 <h1>은 하나만 사용하고 시맨틱 구조를 지키세요.
+
+${INTERACTION_SYSTEM_RULES}
 - 모든 주요 section에는 사이트 전체에서 고유한 data-component-id와 의미 있는 data-component-type을 넣으세요.
 
 [메인 페이지]
@@ -100,7 +107,17 @@ pageCount가 2 이상이면 이후 페이지는 메인 내용을 단순 반복�
 - 메인 페이지: href="#services"
 - 서브페이지: href="index.html#services"
 - 고정 Header에 section이 가리지 않도록 scroll-margin-top을 적용하세요.
-- 모바일은 checkbox + label + CSS만 사용한 햄버거 메뉴로 변경하세요.
+- 영역 이동은 href="#섹션id"만 사용하세요.
+- 모바일 메뉴는 숨긴 checkbox와 label만 사용하세요. data-action은 쓰지 마세요.
+<div class="crep-nav">
+  <input class="crep-nav__toggle" type="checkbox" id="crep-nav-toggle">
+  <label class="crep-nav__button" for="crep-nav-toggle">메뉴</label>
+  <nav class="crep-nav__panel"><div><a href="#services">서비스</a></div></nav>
+</div>
+.crep-nav__toggle { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.crep-nav__panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease; }
+.crep-nav__panel > div { overflow: hidden; }
+.crep-nav__toggle:checked ~ .crep-nav__panel { grid-template-rows: 1fr; }
 
 [Hero]
 - Hero에는 photoUrls의 첫 번째 이미지를 크게 사용하세요.
@@ -120,7 +137,6 @@ pageCount가 2 이상이면 이후 페이지는 메인 내용을 단순 반복�
 - 모든 의미 있는 이미지에 구체적인 alt를 작성하세요.
 - photoUrls의 두 번째 이미지부터 갤러리에 사용하세요.
 - 두 번째 이후 이미지가 없으면 갤러리 section을 만들지 마세요.
-- 갤러리는 scroll-snap-type: x mandatory 기반 가로 캐러셀로 만들고 이전/다음 이동은 script 없이 앵커로 구현하세요.
 
 [콘텐츠]
 - Lorem Ipsum이나 영어 자리표시 문구를 사용하지 마세요.
@@ -152,6 +168,7 @@ pageCount가 2 이상이면 이후 페이지는 메인 내용을 단순 반복�
 [CSS]
 - 색상, 간격, 글자 크기, Header 높이는 CSS 변수로 관리하세요.
 - 공통 class를 재사용하고 동일 규칙을 중복하지 마세요.
+- html { scroll-behavior: smooth; } 를 주세요.
 - 공통 CSS는 pageOrder 1의 css에만 작성하세요.
 - pageOrder 2 이상은 pageOrder 1 CSS가 먼저 로드된다는 전제로 해당 페이지 전용 규칙만 작성하세요.
 
@@ -175,12 +192,12 @@ pageCount가 2 이상이면 이후 페이지는 메인 내용을 단순 반복�
 - 첫 photoUrls 이미지가 Hero에만 사용됨
 - nav 링크 대상 section 존재
 - 서브페이지 nav가 메인 페이지 section으로 이동
-- 모바일 햄버거가 CSS만으로 동작
+- 모바일 메뉴는 숨긴 checkbox와 label로만 여닫힙니다
 - 존재하지 않는 회사 정보나 이미지 URL을 생성하지 않음
 - data-component-id 중복 없음
 - 최종 결과가 유효한 JSON`;
 
-  const rules = interactionRulesFor(kinds);
+  const rules = interactionRulesFor(attached);
   const user = `다음 입력 정보를 바탕으로 사이트를 생성하세요.
 <site-input>
 ${JSON.stringify(siteInput, null, 2)}

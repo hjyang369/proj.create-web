@@ -1,3 +1,5 @@
+import { keepAllowedActions } from "./interaction-actions.js";
+
 export type GeneratedSitePage = {
   pageType: string;
   pageOrder: number;
@@ -52,7 +54,7 @@ export function parseSiteGenerationResponse(
     return {
       pageType: record.pageType,
       pageOrder: record.pageOrder,
-      html: record.html,
+      html: keepAllowedActions(record.html),
       css: record.css,
     };
   });

@@ -79,6 +79,29 @@ describe("GeminiSiteGenerator", () => {
     expect(usedModel).toBe("gemini-3.5-flash-lite");
     expect(DEFAULT_GEMINI_MODEL).toBe("gemini-3.5-flash-lite");
   });
+
+  it("생성 전에 폼을 보고 고른 탭 예시만 사이트 작성 프롬프트에 붙인다", async () => {
+    const prompts: string[] = [];
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async ({ prompt }) => {
+        prompts.push(prompt);
+        if (prompts.length === 1) return '{"종류":["탭"]}';
+        return JSON.stringify({ pages: [validPage] });
+      },
+    );
+
+    await generator.generatePages({
+      ...input,
+      oneLineIntro: "컨설팅",
+      description: "소개, 가격, 후기를 한자리에서 바꿔 보여 주세요.",
+    });
+
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toContain("소개, 가격, 후기를 한자리에서 바꿔 보여 주세요.");
+    expect(prompts[1]).toContain('data-action="tabs.select"');
+    expect(prompts[1]).not.toContain("popovertarget");
+  });
 });
 
 describe("describeGeminiError", () => {
@@ -204,16 +227,19 @@ describe("GeminiSiteGenerator.editComponent", () => {
     });
 
     expect(calls).toBe(1);
-    expect(capturedPrompt).toContain('type="radio"');
-    expect(capturedPrompt).toContain("1번 탭은 1번 화면");
+    expect(capturedPrompt).toContain('data-action="tabs.select"');
+    expect(capturedPrompt).toContain("data-tab-panel");
+    expect(capturedPrompt).not.toContain('type="radio"');
     expect(capturedPrompt).not.toContain("crep-switch");
   });
 
   it("색만 바꾸는 요청에는 동작 예시를 넣지 않는다", async () => {
+    let capturedSystem = "";
     let capturedPrompt = "";
     const generator = new GeminiSiteGenerator(
       config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
-      async ({ prompt }) => {
+      async ({ system, prompt }) => {
+        capturedSystem = system;
         capturedPrompt = prompt;
         return JSON.stringify({ html: "<section>수정됨</section>", css: "" });
       },
@@ -227,7 +253,37 @@ describe("GeminiSiteGenerator.editComponent", () => {
     });
 
     expect(capturedPrompt).not.toContain('type="radio"');
-    expect(capturedPrompt).not.toContain('<details class="crep-dropdown">');
+    expect(capturedPrompt).not.toContain('data-action="dropdown.toggle"');
+    expect(capturedSystem).toContain("JavaScript를 생성하지 마세요");
+    expect(capturedSystem).not.toContain("popovertarget");
+    expect(capturedSystem).not.toContain("crep-fold");
+    expect(capturedSystem).not.toContain("clipboard.copy");
+    expect(capturedSystem).not.toContain('data-action="carousel.next"');
+    expect(capturedSystem).not.toContain('data-action="tabs.select"');
+    expect(capturedSystem).not.toContain('data-action="video.play"');
+  });
+
+  it("섹션 수정 결과에서 허용되지 않은 data-action은 지운다", async () => {
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async () =>
+        JSON.stringify({
+          html: '<section><button type="button" data-action="alert(1)">나쁜 버튼</button><button type="button" data-action="menu.toggle" data-target="nav">메뉴</button><button type="button" data-action="tabs.select" data-target="tab-price">가격</button></section>',
+          css: "section{}",
+        }),
+    );
+
+    const result = await generator.editComponent({
+      html: "<section>본문</section>",
+      css: "body{}",
+      sectionIndex: 0,
+      request: "버튼 색만 바꿔 줘",
+    });
+
+    expect(result.html).toContain('data-action="tabs.select"');
+    expect(result.html).not.toContain('data-action="menu.toggle"');
+    expect(result.html).not.toContain('data-action="alert(1)"');
+    expect(result.html).toContain("나쁜 버튼");
   });
 
   it("애매한 요청은 분류 결과가 탭이면 입력 프롬프트에 탭 예시를 넣는다", async () => {
@@ -249,7 +305,8 @@ describe("GeminiSiteGenerator.editComponent", () => {
     });
 
     expect(prompts).toHaveLength(2);
-    expect(prompts[1]).toContain('type="radio"');
+    expect(prompts[1]).toContain('data-action="tabs.select"');
+    expect(prompts[1]).not.toContain('type="radio"');
     expect(prompts[1]).not.toContain("crep-switch");
   });
 

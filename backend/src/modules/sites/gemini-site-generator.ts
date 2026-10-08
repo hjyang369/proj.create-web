@@ -2,9 +2,14 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, type LanguageModelUsage } from "ai";
+import {
+  INTERACTION_SYSTEM_RULES,
+  keepAllowedActions,
+} from "./interaction-actions.js";
 import { buildSiteGenerationPrompt } from "./site-generation-prompt.js";
 import {
   interactionRulesFor,
+  resolveGenerationInteractionKinds,
   resolveInteractionKinds,
 } from "./interaction-rules.js";
 import {
@@ -266,17 +271,14 @@ export class GeminiSiteGenerator implements SiteGenerator {
     const model =
       this.config.get<string>("GEMINI_MODEL")?.trim() || DEFAULT_GEMINI_MODEL;
     console.log(`Gemini 모델: ${model}`);
-    const kinds = await resolveInteractionKinds(
-      input.extraRequest ?? "",
-      {},
-      ({ system, prompt }) =>
-        this.complete({
-          apiKey,
-          model,
-          system,
-          prompt,
-          timeoutMs: GEMINI_TIMEOUT_MS,
-        }),
+    const kinds = await resolveGenerationInteractionKinds(input, ({ system, prompt }) =>
+      this.complete({
+        apiKey,
+        model,
+        system,
+        prompt,
+        timeoutMs: GEMINI_TIMEOUT_MS,
+      }),
     );
     const { system, user } = buildSiteGenerationPrompt(input, kinds);
     const text = await this.complete({
@@ -361,7 +363,8 @@ Return ONLY a valid JSON object with "html" and "css" keys.
 Do not wrap the section in any extra tags.
 Do not include any explanation or markdown code fences.
 html 안에 <style>, <script>, onclick 같은 인라인 이벤트 핸들러, javascript: URL을 넣지 마세요.
-화면 모양은 css 필드에만 작성하세요.`;
+화면 모양은 css 필드에만 작성하세요.
+${INTERACTION_SYSTEM_RULES}`;
 
     const imageContext = input.imageUrl
       ? `\nA new image has been uploaded and is available at this URL: ${input.imageUrl}\nIf the request involves an image, use this URL as the image src.`
@@ -412,6 +415,8 @@ Return a JSON object like: {"html":"...","css":"..."}
     if (DANGEROUS_HTML.test(result.html)) {
       throw new Error("AI 응답에 위험한 HTML이 포함되어 있습니다.");
     }
+
+    result.html = keepAllowedActions(result.html);
 
     // 수정된 섹션을 원래 위치에 끼워넣어 전체 HTML 복원
     let updatedHtml: string;

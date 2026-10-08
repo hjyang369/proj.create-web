@@ -77,6 +77,25 @@ describe("parseSiteGenerationResponse", () => {
     ).toThrow("위험한");
   });
 
+  it("허용된 data-action은 남기고 목록 밖 값은 지운다", () => {
+    const pages = parseSiteGenerationResponse(
+      JSON.stringify({
+        pages: [
+          {
+            ...validPage,
+            html: '<main><button type="button" data-action="tabs.select" data-target="tab-price">가격</button><button type="button" data-action="modal.open" data-target="m">열기</button><button type="button" data-action="alert(document.cookie)">나쁜 버튼</button></main>',
+          },
+        ],
+      }),
+      1,
+    );
+
+    expect(pages[0]?.html).toContain('data-action="tabs.select"');
+    expect(pages[0]?.html).not.toContain('data-action="modal.open"');
+    expect(pages[0]?.html).not.toContain("alert(document.cookie)");
+    expect(pages[0]?.html).toContain("나쁜 버튼");
+  });
+
   it("인라인 이벤트 속성은 거절한다", () => {
     expect(() =>
       parseSiteGenerationResponse(

@@ -179,8 +179,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     );
   }, []);
 
-  const canBack = historyIndex > 0 && !saving;
-  const canForward = historyIndex < siteHistory.length - 1 && !saving;
+  const historyLocked = saving || editLoading || regenerating;
+  const canBack = historyIndex > 0 && !historyLocked;
+  const canForward = historyIndex < siteHistory.length - 1 && !historyLocked;
   const currentSite = historyIndex >= 0 ? siteHistory[historyIndex] : null;
   const canSave =
     currentSite != null &&
@@ -328,7 +329,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   }
 
   function handleEditLogJump(entry: EditLogEntry) {
-    if (entry.historyIndex < 0 || entry.historyIndex >= siteHistory.length) {
+    if (
+      historyLocked ||
+      entry.historyIndex < 0 ||
+      entry.historyIndex >= siteHistory.length
+    ) {
       return;
     }
     setHistoryIndex(entry.historyIndex);
@@ -945,6 +950,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         onSave={() => void saveCurrentDraft()}
         editLog={editLog}
         currentHistoryIndex={historyIndex}
+        historyLocked={historyLocked}
         onEditLogJump={handleEditLogJump}
       />
       {formOpen && preview.kind === "ready" && preview.site.inputs ? (

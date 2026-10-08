@@ -40,8 +40,20 @@ describe("buildSiteGenerationPrompt", () => {
 
     expect(prompt.system).toContain("JSON");
     expect(prompt.system).toContain("data-component-id");
-    expect(prompt.system).toContain("<script>");
-    expect(prompt.system).toContain("인라인 이벤트 핸들러");
+    expect(prompt.system).toContain("JavaScript를 생성하지 마세요");
+    expect(prompt.system).toContain('type="checkbox"');
+    expect(prompt.system).toContain("scroll-behavior: smooth");
+    expect(prompt.system).not.toContain("popovertarget");
+    expect(prompt.system).not.toContain("crep-fold");
+    expect(prompt.system).not.toContain('data-action="carousel.next"');
+    expect(prompt.system).not.toContain("clipboard.copy");
+    expect(prompt.system).not.toContain('data-action="tabs.select"');
+    expect(prompt.system).not.toContain('data-action="video.play"');
+    expect(prompt.user).not.toContain("popovertarget");
+    expect(prompt.user).not.toContain('data-action="carousel.next"');
+    expect(prompt.user).not.toContain("clipboard.copy");
+    expect(prompt.system).not.toContain('data-action="menu.toggle"');
+    expect(prompt.system).not.toContain('data-action="modal.open"');
     expect(prompt.user).not.toContain('type="radio"');
     expect(prompt.user).not.toContain("crep-switch");
     expect(prompt.user).toContain('"companyName": "크레프 스튜디오"');
@@ -60,10 +72,38 @@ describe("buildSiteGenerationPrompt", () => {
       extraRequest: "탭 메뉴와 자주 묻는 질문을 넣어 주세요.",
     });
 
-    expect(prompt.user).toContain('type="radio"');
+    expect(prompt.user).toContain('data-action="tabs.select"');
     expect(prompt.user).toContain('name="crep-accordion-1"');
+    expect(prompt.user).not.toContain('data-action="accordion.toggle"');
+    expect(prompt.user).not.toContain('type="radio"');
     expect(prompt.user).not.toContain("crep-switch");
     expect(prompt.system).not.toContain('type="radio"');
+  });
+
+  it("사진이 두 장 이상이면 사진 넘기기 예시를 입력 프롬프트에만 넣는다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      photos: [
+        ...completeInput.photos,
+        {
+          url: "/uploads/photos/team.webp",
+          originalName: "team.webp",
+        },
+      ],
+    });
+
+    expect(prompt.user).toContain('data-action="carousel.next"');
+    expect(prompt.system).not.toContain('data-action="carousel.next"');
+  });
+
+  it("복사 요청이 있으면 복사 예시를 입력 프롬프트에만 넣는다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      extraRequest: "이메일 복사 버튼을 넣어 주세요.",
+    });
+
+    expect(prompt.user).toContain('data-action="clipboard.copy"');
+    expect(prompt.system).not.toContain("clipboard.copy");
   });
 
   it("비어 있는 선택 입력은 프롬프트 데이터에서 제외한다", () => {

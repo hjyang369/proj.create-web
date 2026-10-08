@@ -3,8 +3,37 @@ import {
   interactionRulesFor,
   matchInteractionKeywords,
   parseInteractionKinds,
+  resolveGenerationInteractionKinds,
   resolveInteractionKinds,
 } from "./interaction-rules.js";
+import type { CreateSiteRecord } from "./sites.store.js";
+
+function generationInput(
+  overrides: Partial<CreateSiteRecord> = {},
+): CreateSiteRecord {
+  return {
+    userId: 1,
+    name: "카페",
+    businessType: null,
+    oneLineIntro: "좋은 커피",
+    description: null,
+    address: "서울",
+    phone: "02-0000-0000",
+    email: "cafe@example.com",
+    purpose: "company_intro",
+    targetCustomer: null,
+    mainColor: null,
+    atmosphere: null,
+    extraRequest: null,
+    pageCount: 1,
+    pageComponents: null,
+    referenceUrl: null,
+    optionalLinks: null,
+    logo: null,
+    photos: [],
+    ...overrides,
+  };
+}
 
 describe("matchInteractionKeywords", () => {
   it.each([
@@ -25,6 +54,9 @@ describe("matchInteractionKeywords", () => {
     ["토글 버튼", ["switch"]],
     ["날짜 선택할 수 있게", ["date-select"]],
     ["선택 목록", ["date-select"]],
+    ["상세 모달로 보여 줘", ["modal"]],
+    ["영상 재생 버튼", ["video"]],
+    ["이메일 복사 버튼", ["clipboard"]],
     ["버튼 색만 바꿔 줘", []],
     ["제목을 짧게", []],
     ["이 사진으로 바꿔 줘", []],
@@ -41,14 +73,38 @@ describe("interactionRulesFor", () => {
   it("고른 종류의 예시만 반환한다", () => {
     const rules = interactionRulesFor(["tab"]);
 
-    expect(rules).toContain('type="radio"');
-    expect(rules).toContain("1번 탭은 1번 화면");
-    expect(rules).not.toContain('<details class="crep-dropdown">');
+    expect(rules).toContain('data-action="tabs.select"');
+    expect(rules).toContain("data-tab-panel");
+    expect(rules).not.toContain('type="radio"');
+    expect(rules).not.toContain('data-action="dropdown.toggle"');
     expect(rules).not.toContain("crep-switch");
   });
 
   it("아무 종류도 없으면 예시를 비운다", () => {
     expect(interactionRulesFor([])).toBe("");
+  });
+
+  it("드롭다운과 접기와 모달은 HTML만 사용한다", () => {
+    const dropdown = interactionRulesFor(["dropdown"]);
+    const accordion = interactionRulesFor(["accordion"]);
+    const modal = interactionRulesFor(["modal"]);
+
+    expect(dropdown).toContain("<details");
+    expect(dropdown).toContain("<summary>");
+    expect(dropdown).not.toContain('data-action="');
+    expect(accordion).toContain('name="crep-accordion-1"');
+    expect(accordion).not.toContain('data-action="');
+    expect(modal).toContain("popovertarget");
+    expect(modal).not.toContain('data-action="');
+  });
+
+  it("복사 요청에는 clipboard.copy 예시만 넣는다", () => {
+    const rules = interactionRulesFor(["clipboard"]);
+
+    expect(rules).toContain('data-action="clipboard.copy"');
+    expect(rules).toContain("data-value");
+    expect(rules).not.toContain("popovertarget");
+    expect(rules).not.toContain('data-action="tabs.select"');
   });
 });
 
@@ -111,5 +167,70 @@ describe("resolveInteractionKinds", () => {
     );
 
     expect(kinds).toEqual([]);
+  });
+});
+
+describe("resolveGenerationInteractionKinds", () => {
+  it("추가 요청이 없어도 폼 전체를 보고 분류한 탭을 고른다", async () => {
+    let capturedPrompt = "";
+
+    const kinds = await resolveGenerationInteractionKinds(
+      generationInput({
+        description: "소개, 가격, 후기를 한자리에서 바꿔 보여 주세요.",
+        oneLineIntro: "컨설팅",
+      }),
+      async ({ prompt }) => {
+        capturedPrompt = prompt;
+        return '{"종류":["탭"]}';
+      },
+    );
+
+    expect(kinds).toEqual(["tab"]);
+    expect(capturedPrompt).toContain("소개, 가격, 후기를 한자리에서 바꿔 보여 주세요.");
+    expect(capturedPrompt).toContain("컨설팅");
+    expect(capturedPrompt).toContain("카페");
+    expect(capturedPrompt).not.toContain("02-0000-0000");
+    expect(capturedPrompt).not.toContain("cafe@example.com");
+    expect(capturedPrompt).not.toContain("서울");
+  });
+
+  it("추가 요청의 탭은 분류가 비어도 남고, 분류는 폼 전체를 본다", async () => {
+    let calls = 0;
+    let capturedPrompt = "";
+
+    const kinds = await resolveGenerationInteractionKinds(
+      generationInput({
+        extraRequest: "탭 메뉴를 넣어 주세요.",
+        description: "가격표는 팝업으로 보여 주세요.",
+      }),
+      async ({ prompt }) => {
+        calls += 1;
+        capturedPrompt = prompt;
+        return '{"종류":["모달"]}';
+      },
+    );
+
+    expect(calls).toBe(1);
+    expect(kinds).toEqual(["tab", "modal"]);
+    expect(capturedPrompt).toContain("탭 메뉴를 넣어 주세요.");
+    expect(capturedPrompt).toContain("가격표는 팝업으로 보여 주세요.");
+  });
+
+  it("평범한 소개이고 분류가 비면 동작 예시를 고르지 않는다", async () => {
+    const kinds = await resolveGenerationInteractionKinds(
+      generationInput(),
+      async () => '{"종류":[]}',
+    );
+
+    expect(kinds).toEqual([]);
+  });
+
+  it("페이지 구성의 FAQ는 접기로 고른다", async () => {
+    const kinds = await resolveGenerationInteractionKinds(
+      generationInput({ pageComponents: ["faq"] }),
+      async () => '{"종류":[]}',
+    );
+
+    expect(kinds).toEqual(["accordion"]);
   });
 });

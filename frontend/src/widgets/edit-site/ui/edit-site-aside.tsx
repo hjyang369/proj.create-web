@@ -56,6 +56,8 @@ type EditSiteAsideProps = {
   editLog: EditLogEntry[];
   /** 현재 보고 있는 historyIndex */
   currentHistoryIndex: number;
+  /** AI 수정·재생성·저장 중에는 내역 이동을 막는다 */
+  historyLocked: boolean;
   onEditLogJump: (entry: EditLogEntry) => void;
 };
 
@@ -216,6 +218,7 @@ export function EditSiteAside({
   onSave,
   editLog,
   currentHistoryIndex,
+  historyLocked,
   onEditLogJump,
 }: EditSiteAsideProps) {
   const editInputRef = useRef<HTMLTextAreaElement>(null);
@@ -504,54 +507,57 @@ export function EditSiteAside({
             {editing ? chrome.sidebar.emptyMessage : chrome.mode.previewMessage}
           </p>
         )}
-        {editLog.length > 0 ? (
-          <div className="border-t border-gray-200 px-4 py-4">
-            <p className="mb-2 text-xs font-medium text-gray-500">
-              {chrome.editLog.title}
-            </p>
-            <ul className="flex flex-col gap-0.5">
-              {editLog.map((entry, idx) => {
-                const isActive = entry.historyIndex === currentHistoryIndex;
-                return (
-                  <li key={idx}>
-                    <button
-                      type="button"
-                      onClick={() => onEditLogJump(entry)}
-                      className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-gray-100 ${
-                        isActive ? "bg-gray-100" : ""
-                      }`}
-                    >
-                      <span className="mt-0.5 shrink-0 text-gray-400">
-                        {entry.type === "regenerate" ? (
-                          <RegenerateIcon />
-                        ) : (
-                          <AiEditIcon />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={`block truncate text-sm ${
-                            isActive
-                              ? "font-medium text-black"
-                              : "text-gray-700"
-                          }`}
-                        >
-                          {entry.type === "regenerate"
-                            ? chrome.editLog.regenerateLabel
-                            : entry.label}
-                        </span>
-                        <span className="mt-0.5 block text-xs text-gray-400">
-                          {formatEntryTime(entry.createdAt)}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ) : null}
       </div>
+      {editLog.length > 0 ? (
+        <div className="shrink-0 max-h-48 overflow-y-auto border-t border-gray-200 px-4 py-4">
+          <p className="mb-2 text-xs font-medium text-gray-500">
+            {chrome.editLog.title}
+          </p>
+          <ul className="flex flex-col gap-0.5">
+            {editLog.map((entry, idx) => {
+              const isActive = entry.historyIndex === currentHistoryIndex;
+              return (
+                <li key={idx}>
+                  <button
+                    type="button"
+                    disabled={historyLocked}
+                    aria-current={isActive ? "true" : undefined}
+                    onClick={() => onEditLogJump(entry)}
+                    className={`flex w-full items-start gap-2
+                      rounded-lg px-3 py-2
+                      text-left
+                      hover:bg-gray-100
+                      disabled:cursor-not-allowed disabled:hover:bg-transparent
+                      ${isActive ? "bg-gray-100" : ""}`}
+                  >
+                    <span className="mt-0.5 shrink-0 text-gray-400">
+                      {entry.type === "regenerate" ? (
+                        <RegenerateIcon />
+                      ) : (
+                        <AiEditIcon />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={`block truncate text-sm ${
+                          isActive ? "font-medium text-black" : "text-gray-700"
+                        }`}
+                      >
+                        {entry.type === "regenerate"
+                          ? chrome.editLog.regenerateLabel
+                          : entry.label}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-gray-400">
+                        {formatEntryTime(entry.createdAt)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
     </aside>
   );
 }

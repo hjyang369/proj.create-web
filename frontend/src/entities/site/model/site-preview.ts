@@ -1,3 +1,8 @@
+import {
+  keepAllowedActions,
+  SITE_INTERACTION_SCRIPT,
+} from "./site-interactions";
+
 export type SitePreviewPage = {
   pageOrder: number;
   html: string;
@@ -5,9 +10,16 @@ export type SitePreviewPage = {
 };
 
 function sanitizePreviewHtml(html: string): string {
-  return html
-    .replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, "")
-    .replace(/<\s*script\b[^>]*>/gi, "");
+  return keepAllowedActions(
+    html
+      .replace(/<\s*script\b[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, "")
+      .replace(/<\s*script\b[^>]*>/gi, "")
+      .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(
+        /(\s(?:href|src)\s*=\s*)(["'])\s*javascript:[^"']*\2/gi,
+        "$1$2#$2",
+      ),
+  );
 }
 
 function sanitizePreviewCss(css: string): string {
@@ -72,6 +84,7 @@ ${css}
 </head>
 <body>
 ${html}
+${SITE_INTERACTION_SCRIPT}
 </body>
 </html>`;
 }
@@ -283,6 +296,7 @@ ${css}
 <body>
 ${html}
 ${CLICK_DETECTOR_SCRIPT}
+${SITE_INTERACTION_SCRIPT}
 </body>
 </html>`;
 }
