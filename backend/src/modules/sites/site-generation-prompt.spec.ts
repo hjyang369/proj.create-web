@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CreateSiteRecord } from "./sites.store.js";
+import { fallbackSiteDesignSpec } from "./site-design-spec.js";
 import { buildSiteGenerationPrompt } from "./site-generation-prompt.js";
 
 const completeInput: CreateSiteRecord = {
@@ -80,7 +81,7 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.system).not.toContain('type="radio"');
   });
 
-  it("사진이 두 장 이상이면 사진 넘기기 예시를 입력 프롬프트에만 넣는다", () => {
+  it("사진이 두 장 이상이어도 설계서가 캐러셀을 고르지 않으면 사진 넘기기를 넣지 않는다", () => {
     const prompt = buildSiteGenerationPrompt({
       ...completeInput,
       photos: [
@@ -91,6 +92,32 @@ describe("buildSiteGenerationPrompt", () => {
         },
       ],
     });
+
+    expect(prompt.user).not.toContain('data-action="carousel.next"');
+    expect(prompt.system).not.toContain('data-action="carousel.next"');
+  });
+
+  it("설계서 섹션이 캐러셀이면 사진이 두 장 이상일 때 사진 넘기기를 넣는다", () => {
+    const plan = fallbackSiteDesignSpec(completeInput);
+    plan.pages[0]?.sections.push({
+      type: "gallery",
+      variant: "carousel",
+      composition: "업로드된 사진을 넘겨 본다.",
+    });
+    const prompt = buildSiteGenerationPrompt(
+      {
+        ...completeInput,
+        photos: [
+          ...completeInput.photos,
+          {
+            url: "/uploads/photos/team.webp",
+            originalName: "team.webp",
+          },
+        ],
+      },
+      [],
+      plan,
+    );
 
     expect(prompt.user).toContain('data-action="carousel.next"');
     expect(prompt.system).not.toContain('data-action="carousel.next"');
@@ -130,5 +157,22 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.user).not.toContain('"logoUrl"');
     expect(prompt.user).not.toContain('"photoUrls"');
     expect(prompt.user).toContain('"companyName": "크레프 스튜디오"');
+  });
+
+  it("설계서가 있으면 고정 히어로 템플릿 대신 섹션 구성을 생성 요청에 넣는다", () => {
+    const spec = fallbackSiteDesignSpec({
+      ...completeInput,
+      businessType: "피부과",
+      mainColor: "#987C6D",
+    });
+    const prompt = buildSiteGenerationPrompt(completeInput, [], spec);
+
+    expect(prompt.system).toContain("asymmetric-photo");
+    expect(prompt.system).toContain(spec.pages[0]?.sections[0]?.composition);
+    expect(prompt.system).toContain("#987C6D");
+    expect(prompt.system).not.toContain("첫 번째 이미지는 Hero에서만");
+    expect(prompt.system).not.toContain("기본 순서:");
+    expect(prompt.user).not.toContain("hero-split-01");
+    expect(prompt.user).not.toContain("<hero-template");
   });
 });

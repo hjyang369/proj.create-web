@@ -6,6 +6,13 @@ import {
   INTERACTION_SYSTEM_RULES,
   keepAllowedActions,
 } from "./interaction-actions.js";
+import { buildPagesFromDesign } from "./site-design-fallback.js";
+import { buildSiteDesignPrompt } from "./site-design-prompt.js";
+import {
+  fallbackSiteDesignSpec,
+  parseSiteDesignSpec,
+} from "./site-design-spec.js";
+import { DESIGN_RULES } from "./section-templates.js";
 import { buildSiteGenerationPrompt } from "./site-generation-prompt.js";
 import {
   interactionRulesFor,
@@ -180,11 +187,40 @@ export const GEMINI_TEXT_GENERATOR = Symbol("GEMINI_TEXT_GENERATOR");
 export const GEMINI_TIMEOUT_MS = 90_000;
 export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
+export const GEMINI_MAX_OUTPUT_TOKENS = 32_768;
+
 export function geminiRequestOptions(timeoutMs: number) {
   return {
     timeout: timeoutMs,
     maxRetries: 0,
   };
+}
+
+export function geminiProviderOptions(model: string) {
+  const usesGemini3 = /(?:^|\/)gemini-3(?:[.-]|$)/i.test(model);
+  return {
+    maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+    providerOptions: {
+      google: {
+        thinkingConfig: usesGemini3
+          ? { thinkingLevel: "minimal" as const }
+          : { thinkingBudget: 0 },
+      },
+    },
+  };
+}
+
+export async function textFromGeminiAttempts(
+  request: () => Promise<string>,
+): Promise<string> {
+  const first = await request();
+  if (first.trim()) return first;
+
+  const second = await request();
+  if (!second.trim()) {
+    throw new Error("AI가 빈 응답을 반환했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  return second;
 }
 
 export function logGeminiTokenUsage(usage: LanguageModelUsage) {
@@ -230,17 +266,34 @@ export async function generateGeminiText(input: {
   timeoutMs: number;
 }): Promise<string> {
   const google = createGoogleGenerativeAI({ apiKey: input.apiKey });
+  const generation = geminiProviderOptions(input.model);
 
   try {
-    const { text, usage } = await generateText({
-      model: google(input.model),
-      system: input.system,
-      prompt: input.prompt,
-      ...geminiRequestOptions(input.timeoutMs),
+    return await textFromGeminiAttempts(async () => {
+      const result = await generateText({
+        model: google(input.model),
+        system: input.system,
+        prompt: input.prompt,
+        maxOutputTokens: generation.maxOutputTokens,
+        providerOptions: generation.providerOptions,
+        ...geminiRequestOptions(input.timeoutMs),
+      });
+      logGeminiTokenUsage(result.usage);
+      if (!result.text.trim()) {
+        console.warn("Gemini 빈 응답", {
+          finishReason: result.finishReason,
+          warnings: result.warnings,
+        });
+      }
+      return result.text;
     });
-    logGeminiTokenUsage(usage);
-    return text;
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("빈 응답을 반환했습니다")
+    ) {
+      throw error;
+    }
     throw new Error(describeGeminiError(error));
   }
 }
@@ -271,25 +324,50 @@ export class GeminiSiteGenerator implements SiteGenerator {
     const model =
       this.config.get<string>("GEMINI_MODEL")?.trim() || DEFAULT_GEMINI_MODEL;
     console.log(`Gemini 모델: ${model}`);
-    const kinds = await resolveGenerationInteractionKinds(input, ({ system, prompt }) =>
+    const designPrompt = buildSiteDesignPrompt(input);
+    const [kinds, designText] = await Promise.all([
+      resolveGenerationInteractionKinds(input, ({ system, prompt }) =>
+        this.complete({
+          apiKey,
+          model,
+          system,
+          prompt,
+          timeoutMs: GEMINI_TIMEOUT_MS,
+        }),
+      ),
       this.complete({
         apiKey,
         model,
-        system,
-        prompt,
+        system: designPrompt.system,
+        prompt: designPrompt.user,
         timeoutMs: GEMINI_TIMEOUT_MS,
       }),
-    );
-    const { system, user } = buildSiteGenerationPrompt(input, kinds);
-    const text = await this.complete({
-      apiKey,
-      model,
-      system,
-      prompt: user,
-      timeoutMs: GEMINI_TIMEOUT_MS,
-    });
-
-    return parseSiteGenerationResponse(text, input.pageCount);
+    ]);
+    const design =
+      parseSiteDesignSpec(
+        designText,
+        input.photos.map((photo) => photo.url),
+      ) ?? fallbackSiteDesignSpec(input);
+    const { system, user } = buildSiteGenerationPrompt(input, kinds, design);
+    try {
+      const text = await this.complete({
+        apiKey,
+        model,
+        system,
+        prompt: user,
+        timeoutMs: GEMINI_TIMEOUT_MS,
+      });
+      return parseSiteGenerationResponse(text, input.pageCount);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("빈 응답을 반환했습니다")
+      ) {
+        console.warn("HTML 응답이 비어 디자인 설계서로 페이지를 조립합니다.");
+        return buildPagesFromDesign(input, design);
+      }
+      throw error;
+    }
   }
 
   async editComponent(input: {
@@ -364,7 +442,8 @@ Do not wrap the section in any extra tags.
 Do not include any explanation or markdown code fences.
 html 안에 <style>, <script>, onclick 같은 인라인 이벤트 핸들러, javascript: URL을 넣지 마세요.
 화면 모양은 css 필드에만 작성하세요.
-${INTERACTION_SYSTEM_RULES}`;
+${INTERACTION_SYSTEM_RULES}
+${DESIGN_RULES}`;
 
     const imageContext = input.imageUrl
       ? `\nA new image has been uploaded and is available at this URL: ${input.imageUrl}\nIf the request involves an image, use this URL as the image src.`

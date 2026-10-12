@@ -4,8 +4,10 @@ import {
   DEFAULT_GEMINI_MODEL,
   GeminiSiteGenerator,
   describeGeminiError,
+  geminiProviderOptions,
   splitHtmlSections,
   replaceSectionInHtml,
+  textFromGeminiAttempts,
 } from "./gemini-site-generator.js";
 import type { CreateSiteRecord } from "./sites.store.js";
 
@@ -97,10 +99,127 @@ describe("GeminiSiteGenerator", () => {
       description: "소개, 가격, 후기를 한자리에서 바꿔 보여 주세요.",
     });
 
-    expect(prompts).toHaveLength(2);
+    expect(prompts).toHaveLength(3);
     expect(prompts[0]).toContain("소개, 가격, 후기를 한자리에서 바꿔 보여 주세요.");
-    expect(prompts[1]).toContain('data-action="tabs.select"');
-    expect(prompts[1]).not.toContain("popovertarget");
+    expect(prompts[2]).toContain('data-action="tabs.select"');
+    expect(prompts[2]).not.toContain("popovertarget");
+  });
+
+  it("디자인 설계를 먼저 받은 뒤 그 섹션 구성으로 페이지를 만든다", async () => {
+    const prompts: string[] = [];
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async ({ prompt, system }) => {
+        prompts.push(`${system}\n${prompt}`);
+        if (prompts.length === 1) return '{"종류":[]}';
+        if (prompts.length === 2) {
+          return JSON.stringify({
+            concept: {
+              name: "고요한 진료",
+              direction: "비대칭 편집",
+              keywords: ["여백"],
+            },
+            palette: {
+              primary: "#1C1917",
+              accent: "#987C6D",
+              background: "#F7F4F1",
+              surface: "#FFFFFF",
+              text: "#1C1917",
+              muted: "#6B6560",
+            },
+            typography: {
+              headingFont: "Iowan Old Style",
+              bodyFont: "Apple SD Gothic Neo",
+              heroSize: "clamp(3.5rem, 8vw, 6rem)",
+              headingStyle: "얇은 세리프",
+            },
+            layout: {
+              hero: "asymmetric-photo",
+              contentWidth: "1120px",
+              sectionSpacing: "넓은 여백",
+              cornerStyle: "sharp",
+              imageTreatment: "세로 사진",
+            },
+            pages: [
+              {
+                pageOrder: 1,
+                visualGoal: "진료 신뢰",
+                sections: [
+                  {
+                    type: "hero",
+                    variant: "asymmetric-photo",
+                    composition: "좌측 큰 제목과 우측 세로 사진",
+                  },
+                ],
+              },
+            ],
+            designRules: ["강조색은 버튼에만"],
+          });
+        }
+        return JSON.stringify({ pages: [validPage] });
+      },
+    );
+
+    await generator.generatePages({
+      ...input,
+      businessType: "피부과",
+      mainColor: "#987C6D",
+    });
+
+    expect(prompts).toHaveLength(3);
+    expect(prompts[1]).toContain("HTML이나 CSS를 생성하지 마세요");
+    expect(prompts[1]).toContain("피부과");
+    expect(prompts[2]).toContain("좌측 큰 제목과 우측 세로 사진");
+    expect(prompts[2]).not.toContain("hero-split-01");
+  });
+
+  it("HTML 응답이 비어 있으면 디자인 설계서로 페이지를 만든다", async () => {
+    let calls = 0;
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async () => {
+        calls += 1;
+        if (calls < 3) return '{"종류":[]}';
+        throw new Error("AI가 빈 응답을 반환했습니다. 잠시 후 다시 시도해 주세요.");
+      },
+    );
+
+    const pages = await generator.generatePages(input);
+
+    expect(calls).toBe(3);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.html).toContain("카페");
+    expect(pages[0]?.html).toContain("좋은 커피");
+    expect(pages[0]?.html).toContain("hero-type");
+  });
+});
+
+describe("geminiProviderOptions", () => {
+  it("긴 HTML을 쓸 수 있게 출력 한도를 두고 생각 토큰은 줄인다", () => {
+    expect(geminiProviderOptions("gemini-3.5-flash-lite")).toEqual({
+      maxOutputTokens: 32768,
+      providerOptions: {
+        google: { thinkingConfig: { thinkingLevel: "minimal" } },
+      },
+    });
+    expect(geminiProviderOptions("gemini-2.5-flash").providerOptions).toEqual({
+      google: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+  });
+});
+
+describe("textFromGeminiAttempts", () => {
+  it("첫 응답이 비어 있으면 한 번 더 요청한다", async () => {
+    const responses = ["", '{"pages":[]}'];
+    const text = await textFromGeminiAttempts(async () => responses.shift() ?? "");
+
+    expect(text).toBe('{"pages":[]}');
+  });
+
+  it("두 번 모두 비어 있으면 빈 응답이라고 안내한다", async () => {
+    await expect(textFromGeminiAttempts(async () => "  ")).rejects.toThrow(
+      "빈 응답",
+    );
   });
 });
 
