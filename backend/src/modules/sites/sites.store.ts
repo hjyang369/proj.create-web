@@ -59,6 +59,19 @@ export type StoredOwnedSite = {
   userId: number;
   name: string;
   pages: StoredSitePageContent[];
+  editingHistoryId: number | null;
+  publishedHistoryId: number | null;
+};
+
+export type SavedDraftVersion = {
+  historyId: number;
+  publishedHistoryId: number | null;
+};
+
+export type OwnedVersionList = {
+  editingHistoryId: number | null;
+  publishedHistoryId: number | null;
+  items: Array<{ id: number; createdAt: Date }>;
 };
 
 export type SitesStore = {
@@ -108,7 +121,27 @@ export type SitesStore = {
       };
       pages: GeneratedSitePage[];
     },
-  ) => Promise<boolean>;
+  ) => Promise<SavedDraftVersion | null>;
+  listOwnedVersions: (
+    userId: number,
+    siteId: number,
+  ) => Promise<OwnedVersionList | null>;
+  openOwnedVersion: (
+    userId: number,
+    siteId: number,
+    historyId: number,
+  ) => Promise<{
+    pages: StoredSitePageContent[];
+    publishedHistoryId: number | null;
+  } | null>;
+  publishOwnedVersion: (
+    userId: number,
+    siteId: number,
+    historyId: number,
+  ) => Promise<{
+    editingHistoryId: number | null;
+    publishedHistoryId: number;
+  } | null>;
   updateOwnedPageContent: (
     userId: number,
     siteId: number,

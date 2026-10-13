@@ -34,6 +34,16 @@ function rewritePreviewSectionLinks(html: string): string {
   );
 }
 
+/** 편집 화면이 번호를 매기는 범위. 완전한 문서는 body 안만 남긴다. */
+function previewBodyHtml(html: string): string {
+  const bodyOpen = html.search(/<body\b/i);
+  if (bodyOpen < 0) return html;
+  const openEnd = html.indexOf(">", bodyOpen);
+  const bodyClose = html.toLowerCase().lastIndexOf("</body>");
+  if (openEnd < 0 || bodyClose < openEnd) return html;
+  return html.slice(openEnd + 1, bodyClose);
+}
+
 function rewriteUploadUrls(source: string, assetOrigin: string): string {
   const origin = assetOrigin.replace(/\/$/, "");
   return source.replace(/(^|["'(\s])\/uploads\//g, `$1${origin}/uploads/`);
@@ -278,8 +288,10 @@ export function buildEditablePreviewDocument(
     .map((page) => {
       const safeHtml = rewritePreviewSectionLinks(sanitizePreviewHtml(page.html));
       const withOrigin = assetOrigin ? rewriteUploadUrls(safeHtml, assetOrigin) : safeHtml;
-      // data-crep-page 속성을 각 최상위 태그에 추가하기 위해 래핑
-      return `<div data-crep-page="${page.pageOrder}" style="display:contents">${withOrigin}</div>`;
+      // head의 meta, title은 브라우저가 칸의 자식으로 남겨 헤더 번호를 뒤로 민다.
+      // 서버는 body 안만 세므로, 편집 화면에도 body 안만 넣는다.
+      const sectionHtml = previewBodyHtml(withOrigin);
+      return `<div data-crep-page="${page.pageOrder}" style="display:contents">${sectionHtml}</div>`;
     })
     .join("\n");
 

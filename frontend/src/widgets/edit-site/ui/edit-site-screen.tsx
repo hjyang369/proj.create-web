@@ -15,7 +15,10 @@ import {
   isAllowedFontSize,
   isAllowedFontWeight,
   isAllowedTextColor,
+  listSiteHistory,
   normalizeBackgroundImage,
+  openSiteHistory,
+  publishSiteHistory,
   visibleTextStyle,
   readEditableFromHtml,
   regenerateSiteDraft,
@@ -23,10 +26,12 @@ import {
   toPreviewAssetUrl,
   toPreviewHref,
   uploadSiteImage,
+  applyOpenedVersion,
   type EditableElement,
   type ElementEdit,
   type SiteEditorDetail,
   type SiteEditorPage,
+  type SiteVersionList,
 } from "@/entities/site";
 import { CreateSiteForm, type SiteFormSubmit } from "@/features/create-site";
 import { API_URL } from "@/shared/api";
@@ -35,6 +40,7 @@ import {
   initialSidebarOpen,
 } from "../model/edit-page-layout";
 import { EditSiteAside, type SelectedComponent, type EditLogEntry } from "./edit-site-aside";
+import { EditSiteHistoryDialog } from "./edit-site-history-dialog";
 import { EditSiteManualPanel } from "./edit-site-manual-panel";
 
 /** 우클릭으로 고른, 직접 편집 중인 요소 */
@@ -158,6 +164,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versionList, setVersionList] = useState<SiteVersionList | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [busyHistoryId, setBusyHistoryId] = useState<number | null>(null);
+  const [publishingHistoryId, setPublishingHistoryId] = useState<number | null>(
+    null,
+  );
   // 미리보기 iframe에 넣는 문서. 직접 편집을 "적용"할 때는 바꾸지 않아서
   // iframe이 다시 그려지지 않는다. (스크롤·깜빡임 유지)
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
@@ -179,9 +193,10 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     );
   }, []);
 
-  const historyLocked = saving || editLoading || regenerating;
-  const canBack = historyIndex > 0 && !historyLocked;
-  const canForward = historyIndex < siteHistory.length - 1 && !historyLocked;
+  const historyLocked = saving || editLoading || regenerating || busyHistoryId !== null;
+  const canStepBack = historyIndex > 0 && !historyLocked;
+  const canStepForward =
+    historyIndex < siteHistory.length - 1 && !historyLocked;
   const currentSite = historyIndex >= 0 ? siteHistory[historyIndex] : null;
   const canSave =
     currentSite != null &&
@@ -287,7 +302,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     setManualTarget(null);
   }
 
-  /** iframe을 새 사이트 내용으로 다시 그린다. (AI 수정, 재생성, 뒤로/앞으로가기, 불러오기) */
+  /** iframe을 새 사이트 내용으로 다시 그린다. (AI 수정, 재생성, 수정 내역 이동, 저장 버전 열기) */
   function showSite(site: SiteEditorDetail) {
     setPreviewDoc(
       site.pages.length > 0
@@ -314,15 +329,19 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     }
   }
 
-  function handleHistoryBack() {
-    if (!canBack) return;
+  function handleStepBack() {
+    if (historyIndex <= 0 || historyLocked) {
+      return;
+    }
     const nextIndex = historyIndex - 1;
     setHistoryIndex(nextIndex);
     showSite(siteHistory[nextIndex]);
   }
 
-  function handleHistoryForward() {
-    if (!canForward) return;
+  function handleStepForward() {
+    if (historyIndex >= siteHistory.length - 1 || historyLocked) {
+      return;
+    }
     const nextIndex = historyIndex + 1;
     setHistoryIndex(nextIndex);
     showSite(siteHistory[nextIndex]);
@@ -832,6 +851,109 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     }
   }
 
+  async function loadVersionList(id: number) {
+    const list = await listSiteHistory(id);
+    setVersionList(list);
+  }
+
+  async function openHistoryPanel() {
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return;
+    }
+
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    setHistoryError(null);
+
+    try {
+      await loadVersionList(id);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "버전 목록을 불러오지 못했습니다.";
+      setHistoryError(message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function openSavedVersion(historyId: number) {
+    if (preview.kind !== "ready" || !currentSite || busyHistoryId !== null) {
+      return;
+    }
+
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return;
+    }
+
+    setBusyHistoryId(historyId);
+    setHistoryError(null);
+
+    try {
+      const opened = await openSiteHistory(id, historyId);
+      const next = applyOpenedVersion(currentSite, opened);
+      pushSiteHistory(next);
+      setSavedKey(snapshotKey(next));
+      await loadVersionList(id);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "버전을 열지 못했습니다.";
+      setHistoryError(message);
+    } finally {
+      setBusyHistoryId(null);
+    }
+  }
+
+  async function publishSavedVersion(historyId: number) {
+    if (preview.kind !== "ready" || busyHistoryId !== null) {
+      return;
+    }
+
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return;
+    }
+
+    setBusyHistoryId(historyId);
+    setPublishingHistoryId(historyId);
+    setHistoryError(null);
+
+    try {
+      const published = await publishSiteHistory(id, historyId);
+      const index = historyIndex;
+      setSiteHistory((prev) =>
+        prev.map((item, itemIndex) =>
+          itemIndex === index
+            ? {
+                ...item,
+                editingHistoryId: published.editingHistoryId,
+                publishedHistoryId: published.publishedHistoryId,
+              }
+            : item,
+        ),
+      );
+      setPreview({
+        kind: "ready",
+        site: {
+          ...preview.site,
+          editingHistoryId: published.editingHistoryId,
+          publishedHistoryId: published.publishedHistoryId,
+        },
+      });
+      await loadVersionList(id);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "배포하지 못했습니다.";
+      setHistoryError(message);
+    } finally {
+      setBusyHistoryId(null);
+      setPublishingHistoryId(null);
+    }
+  }
+
   async function saveCurrentDraft() {
     if (!canSave || preview.kind !== "ready" || !currentSite?.inputs) {
       return;
@@ -857,6 +979,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       setHistoryIndex(index);
       setPreview({ kind: "ready", site: saved });
       setSavedKey(snapshotKey(saved));
+      if (historyOpen) {
+        await loadVersionList(id);
+      }
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "저장하지 못했습니다.";
@@ -893,13 +1018,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       </section>
       <EditSiteAside
         open={sidebarOpen}
-        chrome={{
-          ...chrome,
-          history: {
-            back: { ...chrome.history.back, enabled: canBack },
-            forward: { ...chrome.history.forward, enabled: canForward },
-          },
-        }}
+        chrome={chrome}
         onToggle={() => setSidebarOpen((open) => !open)}
         editing={editing}
         onChangeEditing={changePreviewMode}
@@ -942,8 +1061,12 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
           setEditError(null);
           setUploadedImageUrl(null);
         }}
-        onHistoryBack={handleHistoryBack}
-        onHistoryForward={handleHistoryForward}
+        onStepBack={handleStepBack}
+        onStepForward={handleStepForward}
+        canStepBack={canStepBack}
+        canStepForward={canStepForward}
+        onOpenHistory={() => void openHistoryPanel()}
+        canOpenHistory={preview.kind === "ready"}
         canSave={canSave}
         saving={saving}
         saveError={saveError}
@@ -953,6 +1076,19 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         historyLocked={historyLocked}
         onEditLogJump={handleEditLogJump}
       />
+      {historyOpen ? (
+        <EditSiteHistoryDialog
+          chrome={chrome.history}
+          list={versionList}
+          loading={historyLoading}
+          error={historyError}
+          busyHistoryId={busyHistoryId}
+          publishingHistoryId={publishingHistoryId}
+          onClose={() => setHistoryOpen(false)}
+          onOpenVersion={(historyId) => void openSavedVersion(historyId)}
+          onPublishVersion={(historyId) => void publishSavedVersion(historyId)}
+        />
+      ) : null}
       {formOpen && preview.kind === "ready" && preview.site.inputs ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-6">
           <div

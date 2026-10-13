@@ -46,8 +46,12 @@ type EditSiteAsideProps = {
   onImageFile: (file: File) => void;
   onClearImage: () => void;
   onCancelSelection: () => void;
-  onHistoryBack: () => void;
-  onHistoryForward: () => void;
+  canStepBack: boolean;
+  canStepForward: boolean;
+  onStepBack: () => void;
+  onStepForward: () => void;
+  onOpenHistory: () => void;
+  canOpenHistory: boolean;
   canSave: boolean;
   saving: boolean;
   saveError: string | null;
@@ -64,6 +68,13 @@ type EditSiteAsideProps = {
 const iconButtonClassName = `flex shrink-0 items-center justify-center
   h-10 w-10
   text-gray-800
+  bg-white rounded-lg border border-gray-300
+  hover:bg-gray-100
+  disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
+
+const historyButtonClassName = `flex shrink-0 items-center justify-center
+  h-10 px-4
+  text-sm font-medium whitespace-nowrap text-gray-800
   bg-white rounded-lg border border-gray-300
   hover:bg-gray-100
   disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
@@ -210,8 +221,12 @@ export function EditSiteAside({
   onImageFile,
   onClearImage,
   onCancelSelection,
-  onHistoryBack,
-  onHistoryForward,
+  canStepBack,
+  canStepForward,
+  onStepBack,
+  onStepForward,
+  onOpenHistory,
+  canOpenHistory,
   canSave,
   saving,
   saveError,
@@ -286,24 +301,32 @@ export function EditSiteAside({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label={chrome.history.back.label}
-              disabled={!chrome.history.back.enabled}
+              aria-label={chrome.undo.backLabel}
+              disabled={!canStepBack}
               className={iconButtonClassName}
-              onClick={onHistoryBack}
+              onClick={onStepBack}
             >
               <BackIcon />
             </button>
             <button
               type="button"
-              aria-label={chrome.history.forward.label}
-              disabled={!chrome.history.forward.enabled}
+              aria-label={chrome.undo.forwardLabel}
+              disabled={!canStepForward}
               className={iconButtonClassName}
-              onClick={onHistoryForward}
+              onClick={onStepForward}
             >
               <ForwardIcon />
             </button>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              className={historyButtonClassName}
+              disabled={historyLocked || !canOpenHistory}
+              onClick={onOpenHistory}
+            >
+              {chrome.history.label}
+            </button>
             <button
               type="button"
               className={saveButtonClassName}

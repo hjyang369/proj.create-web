@@ -134,6 +134,29 @@ describe("buildSitePreviewDocument", () => {
 });
 
 describe("buildEditablePreviewDocument", () => {
+  it("편집 미리보기는 head를 빼고 body 안만 넣어서 헤더 번호가 밀리지 않게 한다", () => {
+    const document = buildEditablePreviewDocument([
+      {
+        pageOrder: 1,
+        html: '<<!doctype html><html><head><meta charset="utf-8"><title>인네이처</title><link rel="stylesheet" href="style.css"></head><body><a>건너뛰기</a><header>헤더</header><main>본문</main></body></html>',
+        css: "",
+      },
+    ]);
+
+    const innerStart =
+      document.indexOf('style="display:contents">') +
+      'style="display:contents">'.length;
+    const inner = document.slice(innerStart, document.indexOf("</div>", innerStart));
+
+    assert.equal(inner.includes("<title>"), false);
+    assert.equal(inner.includes("<meta"), false);
+    assert.equal(inner.includes('href="style.css"'), false);
+    assert.equal(inner.includes("<a>건너뛰기</a>"), true);
+    assert.equal(inner.includes("<header>헤더</header>"), true);
+    assert.equal(inner.includes("<main>본문</main>"), true);
+    assert.ok(inner.indexOf("<a>건너뛰기</a>") < inner.indexOf("<header>헤더</header>"));
+  });
+
   it("보기 모드에서는 클릭을 가로채지 않고, 편집 모드에서만 요소를 고른다", () => {
     const document = buildEditablePreviewDocument([
       {

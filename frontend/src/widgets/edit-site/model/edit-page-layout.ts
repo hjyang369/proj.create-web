@@ -2,9 +2,19 @@ export type EditPageChrome = {
   previewSide: "left";
   sidebarSide: "right";
   controls: "sidebar";
+  undo: {
+    backLabel: "뒤로가기";
+    forwardLabel: "앞으로가기";
+  };
   history: {
-    back: { label: "뒤로가기"; enabled: boolean };
-    forward: { label: "앞으로가기"; enabled: boolean };
+    label: "히스토리";
+    title: "히스토리";
+    closeLabel: "닫기";
+    hint: "줄을 누르면 그 버전을 편집합니다.";
+    emptyMessage: "아직 저장된 버전이 없습니다. 저장하기를 누르면 여기에 쌓입니다.";
+    loadingMessage: "버전 목록을 불러오는 중입니다.";
+    publishLabel: "배포";
+    publishingLabel: "배포하는 중...";
   };
   save: { label: "저장하기" };
   regenerate: {
@@ -39,9 +49,20 @@ export function describeEditPageChrome(): EditPageChrome {
     previewSide: "left",
     sidebarSide: "right",
     controls: "sidebar",
+    undo: {
+      backLabel: "뒤로가기",
+      forwardLabel: "앞으로가기",
+    },
     history: {
-      back: { label: "뒤로가기", enabled: false },
-      forward: { label: "앞으로가기", enabled: false },
+      label: "히스토리",
+      title: "히스토리",
+      closeLabel: "닫기",
+      hint: "줄을 누르면 그 버전을 편집합니다.",
+      emptyMessage:
+        "아직 저장된 버전이 없습니다. 저장하기를 누르면 여기에 쌓입니다.",
+      loadingMessage: "버전 목록을 불러오는 중입니다.",
+      publishLabel: "배포",
+      publishingLabel: "배포하는 중...",
     },
     save: { label: "저장하기" },
     regenerate: {

@@ -1,4 +1,20 @@
 export { getMySite } from "./api/get-my-site";
+export {
+  listSiteHistory,
+  openSiteHistory,
+  publishSiteHistory,
+} from "./api/site-history";
+export type {
+  OpenedSiteVersion,
+  PublishedSiteVersion,
+  SiteVersionItem,
+  SiteVersionList,
+} from "./api/site-history";
+export {
+  applyOpenedVersion,
+  describeVersionBadges,
+  formatVersionCreatedAt,
+} from "./model/site-version-view";
 export { regenerateSiteDraft } from "./api/regenerate-site-draft";
 export { saveSiteDraft } from "./api/save-site-draft";
 export { updateSiteImages } from "./api/update-site-images";

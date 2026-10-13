@@ -17,6 +17,7 @@ import {
   type StoredSitePageContent,
 } from "./sites.store.js";
 import type { CreateSiteDto } from "./dto/create-site.dto.js";
+import { markHistoryItems } from "./site-version.js";
 import {
   planSiteImages,
   toSiteInputForm,
@@ -41,6 +42,31 @@ export type SiteEditorDetail = {
   name: string;
   pages: StoredSitePageContent[];
   inputs: SiteInputForm | null;
+  editingHistoryId: number | null;
+  publishedHistoryId: number | null;
+};
+
+export type SiteHistoryList = {
+  editingHistoryId: number | null;
+  publishedHistoryId: number | null;
+  items: Array<{
+    id: number;
+    createdAt: string;
+    isEditing: boolean;
+    isPublished: boolean;
+  }>;
+};
+
+export type OpenedSiteHistory = {
+  historyId: number;
+  editingHistoryId: number;
+  publishedHistoryId: number | null;
+  pages: StoredSitePageContent[];
+};
+
+export type PublishedSiteHistory = {
+  editingHistoryId: number | null;
+  publishedHistoryId: number;
 };
 
 type SiteInputUpdate = Omit<CreateSiteRecord, "userId" | "logo" | "photos">;
@@ -151,6 +177,8 @@ export class SitesService {
         (left, right) => left.pageOrder - right.pageOrder,
       ),
       inputs: input && input.userId === userId ? toSiteInputForm(input) : null,
+      editingHistoryId: site.editingHistoryId ?? null,
+      publishedHistoryId: site.publishedHistoryId ?? null,
     };
   }
 
@@ -326,6 +354,8 @@ export class SitesService {
       name: record.name,
       pages: [...pages].sort((left, right) => left.pageOrder - right.pageOrder),
       inputs: toSiteInputForm(record),
+      editingHistoryId: null,
+      publishedHistoryId: null,
     };
   }
 
@@ -468,7 +498,87 @@ export class SitesService {
         ...fields,
         ...nextImages,
       }),
+      editingHistoryId: saved.historyId,
+      publishedHistoryId: saved.publishedHistoryId,
     };
+  }
+
+  async listHistory(userId: number, siteId: number): Promise<SiteHistoryList> {
+    this.assertOwner(userId, siteId);
+
+    const listed = await this.sites.listOwnedVersions(userId, siteId);
+    if (!listed) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    return {
+      editingHistoryId: listed.editingHistoryId,
+      publishedHistoryId: listed.publishedHistoryId,
+      items: markHistoryItems(
+        listed.items,
+        listed.editingHistoryId,
+        listed.publishedHistoryId,
+      ),
+    };
+  }
+
+  async openHistory(
+    userId: number,
+    siteId: number,
+    historyId: number,
+  ): Promise<OpenedSiteHistory> {
+    this.assertOwner(userId, siteId);
+    this.assertHistoryId(historyId);
+
+    const opened = await this.sites.openOwnedVersion(userId, siteId, historyId);
+    if (!opened) {
+      throw new NotFoundException("버전을 찾을 수 없습니다.");
+    }
+
+    return {
+      historyId,
+      editingHistoryId: historyId,
+      publishedHistoryId: opened.publishedHistoryId,
+      pages: [...opened.pages].sort(
+        (left, right) => left.pageOrder - right.pageOrder,
+      ),
+    };
+  }
+
+  async publishHistory(
+    userId: number,
+    siteId: number,
+    historyId: number,
+  ): Promise<PublishedSiteHistory> {
+    this.assertOwner(userId, siteId);
+    this.assertHistoryId(historyId);
+
+    const published = await this.sites.publishOwnedVersion(
+      userId,
+      siteId,
+      historyId,
+    );
+    if (!published) {
+      throw new NotFoundException("버전을 찾을 수 없습니다.");
+    }
+
+    return published;
+  }
+
+  private assertOwner(userId: number, siteId: number): void {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException("로그인이 필요합니다.");
+    }
+
+    if (!Number.isInteger(siteId) || siteId <= 0) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+  }
+
+  private assertHistoryId(historyId: number): void {
+    if (!Number.isInteger(historyId) || historyId <= 0) {
+      throw new NotFoundException("버전을 찾을 수 없습니다.");
+    }
   }
 
   async uploadSiteImage(

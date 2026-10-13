@@ -28,6 +28,8 @@ MySQL + Drizzle ORM을 사용한다.
 - type: enum('web', 'app') — 웹 또는 앱
 - status: enum('generating', 'draft', 'published') — 생성중 / 편집중 / 배포됨
 - thumbnail_url: varchar(500), nullable — 사이트 썸네일
+- published_history_id: bigint, FK → site_edit_history.id, nullable — 지금 배포된 버전. 비어 있으면 아직 배포 전
+- editing_history_id: bigint, FK → site_edit_history.id, nullable — 편집 페이지가 열어 둔 버전. 비어 있으면 저장된 버전을 연 적이 없고, 화면은 site_pages를 보여 줌
 - created_at: datetime
 - updated_at: datetime
 
@@ -126,12 +128,28 @@ component_data JSON 구조 예시:
 
 ## site_edit_history
 
-편집 히스토리 (뒤로가기 / 앞으로가기 기능)
+저장하기를 누를 때마다 추가되는 버전. 이미 있는 행은 수정하지 않는다.
+화면의 수정 내역(뒤로가기 / 앞으로가기)은 여기 저장하지 않는다.
 
 - id: bigint, PK, auto increment
 - site_id: bigint, FK → sites.id
-- snapshot: json — 해당 시점의 전체 site_pages 데이터 스냅샷
+- snapshot: json — 그 시점의 페이지 전체 (종류, 순서, html, css)
 - created_at: datetime
+
+snapshot JSON 구조 예시:
+
+```json
+{
+  "pages": [
+    {
+      "pageType": "company_intro",
+      "pageOrder": 1,
+      "html": "<main>...</main>",
+      "css": "main {}"
+    }
+  ]
+}
+```
 
 ---
 

@@ -4,7 +4,9 @@ import {
   mysqlEnum,
   mysqlTable,
   varchar,
+  type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
+import { siteEditHistory } from "./site-edit-history.js";
 import { users } from "./users.js";
 
 export const sites = mysqlTable("sites", {
@@ -18,6 +20,12 @@ export const sites = mysqlTable("sites", {
     .notNull()
     .default("draft"),
   thumbnailUrl: varchar("thumbnail_url", { length: 500 }),
+  publishedHistoryId: bigint("published_history_id", {
+    mode: "number",
+  }).references((): AnyMySqlColumn => siteEditHistory.id),
+  editingHistoryId: bigint("editing_history_id", {
+    mode: "number",
+  }).references((): AnyMySqlColumn => siteEditHistory.id),
   createdAt: datetime("created_at").notNull().default(new Date()),
   updatedAt: datetime("updated_at").notNull().default(new Date()),
 });

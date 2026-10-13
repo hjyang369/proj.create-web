@@ -281,6 +281,8 @@ describe('SitesService.getMine', () => {
           css: 'main { color: black; }',
         },
       ],
+      editingHistoryId: null,
+      publishedHistoryId: null,
     });
   });
 
@@ -307,6 +309,8 @@ describe('SitesService.getMine', () => {
       name: '카페',
       pages: [],
       inputs: toSiteInputForm(storedGenerationInput),
+      editingHistoryId: null,
+      publishedHistoryId: null,
     });
   });
 
@@ -444,6 +448,8 @@ describe('SitesService.regenerateDraft', () => {
           css: generatedPage.css,
         },
       ],
+      editingHistoryId: null,
+      publishedHistoryId: null,
     });
     expect(generatedFrom?.name).toBe('저녁커피');
     expect(generatedFrom?.oneLineIntro).toBe('밤에 마시는 커피');
@@ -773,7 +779,7 @@ describe('SitesService.saveDraft', () => {
         },
         async saveOwnedDraft(userId, siteId, draft) {
           saved = { userId, siteId, ...draft };
-          return true;
+          return { historyId: 11, publishedHistoryId: null };
         },
       } as SitesStore,
       unusedGenerator,
@@ -795,6 +801,8 @@ describe('SitesService.saveDraft', () => {
       name: '저녁커피',
       pages: [generatedPage],
       inputs,
+      editingHistoryId: 11,
+      publishedHistoryId: null,
     });
     expect(saved?.userId).toBe(1);
     expect(saved?.siteId).toBe(4);
@@ -802,5 +810,206 @@ describe('SitesService.saveDraft', () => {
     expect(saved?.inputs.oneLineIntro).toBe('밤에 마시는 커피');
     expect(saved?.images.logo).toEqual(storedGenerationInput.logo);
     expect(saved?.pages).toEqual([generatedPage]);
+  });
+
+  it('저장하면 새 버전을 편집 중으로 두고 배포 중 버전은 그대로 둔다', async () => {
+    const service = new SitesService(
+      {
+        async findOwnedGenerationInput() {
+          return storedGenerationInput;
+        },
+        async saveOwnedDraft() {
+          return { historyId: 4, publishedHistoryId: 2 };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    const inputs = toSiteInputForm(storedGenerationInput);
+
+    await expect(
+      service.saveDraft(1, 4, {
+        pages: [generatedPage],
+        inputs,
+      }),
+    ).resolves.toMatchObject({
+      editingHistoryId: 4,
+      publishedHistoryId: 2,
+    });
+  });
+});
+
+describe('SitesService.listHistory', () => {
+  it('저장된 버전이 없으면 빈 목록을 돌려준다', async () => {
+    const service = new SitesService(
+      {
+        async listOwnedVersions() {
+          return {
+            editingHistoryId: null,
+            publishedHistoryId: null,
+            items: [],
+          };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.listHistory(1, 4)).resolves.toEqual({
+      editingHistoryId: null,
+      publishedHistoryId: null,
+      items: [],
+    });
+  });
+
+  it('편집 중과 배포 중은 각 행 id와 사이트 포인터가 같을 때만 표시한다', async () => {
+    const service = new SitesService(
+      {
+        async listOwnedVersions() {
+          return {
+            editingHistoryId: 3,
+            publishedHistoryId: 2,
+            items: [
+              { id: 3, createdAt: new Date('2026-03-03T00:00:00.000Z') },
+              { id: 2, createdAt: new Date('2026-03-02T00:00:00.000Z') },
+              { id: 1, createdAt: new Date('2026-03-01T00:00:00.000Z') },
+            ],
+          };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.listHistory(1, 4)).resolves.toEqual({
+      editingHistoryId: 3,
+      publishedHistoryId: 2,
+      items: [
+        {
+          id: 3,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          isEditing: true,
+          isPublished: false,
+        },
+        {
+          id: 2,
+          createdAt: '2026-03-02T00:00:00.000Z',
+          isEditing: false,
+          isPublished: true,
+        },
+        {
+          id: 1,
+          createdAt: '2026-03-01T00:00:00.000Z',
+          isEditing: false,
+          isPublished: false,
+        },
+      ],
+    });
+  });
+
+  it('내 사이트가 아니면 히스토리를 찾지 못했다고 알린다', async () => {
+    const service = new SitesService(
+      {
+        async listOwnedVersions() {
+          return null;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.listHistory(1, 9)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('SitesService.openHistory', () => {
+  it('연 버전의 페이지만 편집 중으로 옮기고 배포 중은 그대로 둔다', async () => {
+    let opened: { userId: number; siteId: number; historyId: number } | undefined;
+    const service = new SitesService(
+      {
+        async openOwnedVersion(userId, siteId, historyId) {
+          opened = { userId, siteId, historyId };
+          return {
+            pages: [
+              {
+                pageType: 'company_intro',
+                pageOrder: 1,
+                html: '<main>버전 1</main>',
+                css: '',
+              },
+            ],
+            publishedHistoryId: 2,
+          };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.openHistory(1, 4, 1)).resolves.toEqual({
+      historyId: 1,
+      editingHistoryId: 1,
+      publishedHistoryId: 2,
+      pages: [
+        {
+          pageType: 'company_intro',
+          pageOrder: 1,
+          html: '<main>버전 1</main>',
+          css: '',
+        },
+      ],
+    });
+    expect(opened).toEqual({ userId: 1, siteId: 4, historyId: 1 });
+  });
+
+  it('이 사이트 버전이 아니면 열지 못한다', async () => {
+    const service = new SitesService(
+      {
+        async openOwnedVersion() {
+          return null;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.openHistory(1, 4, 99)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('SitesService.publishHistory', () => {
+  it('고른 버전만 배포 중으로 두고 편집 중 버전은 그대로 둔다', async () => {
+    let published:
+      | { userId: number; siteId: number; historyId: number }
+      | undefined;
+    const service = new SitesService(
+      {
+        async publishOwnedVersion(userId, siteId, historyId) {
+          published = { userId, siteId, historyId };
+          return { editingHistoryId: 3, publishedHistoryId: historyId };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.publishHistory(1, 4, 2)).resolves.toEqual({
+      editingHistoryId: 3,
+      publishedHistoryId: 2,
+    });
+    expect(published).toEqual({ userId: 1, siteId: 4, historyId: 2 });
+  });
+
+  it('이 사이트 버전이 아니면 배포하지 못한다', async () => {
+    const service = new SitesService(
+      {
+        async publishOwnedVersion() {
+          return null;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.publishHistory(1, 4, 99)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

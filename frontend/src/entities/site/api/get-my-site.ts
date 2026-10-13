@@ -39,6 +39,8 @@ export type SiteEditorDetail = {
   name: string;
   pages: SiteEditorPage[];
   inputs: SiteInputValues | null;
+  editingHistoryId: number | null;
+  publishedHistoryId: number | null;
 };
 
 export async function getMySite(siteId: number): Promise<SiteEditorDetail> {

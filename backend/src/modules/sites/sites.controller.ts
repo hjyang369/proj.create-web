@@ -118,6 +118,35 @@ export class SitesController {
     });
   }
 
+  @Get(":id/history")
+  @UseGuards(JwtAuthGuard)
+  listHistory(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+  ) {
+    return this.sitesService.listHistory(request.user.id, id);
+  }
+
+  @Post(":id/history/:historyId/open")
+  @UseGuards(JwtAuthGuard)
+  openHistory(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @Param("historyId", ParseIntPipe) historyId: number,
+  ) {
+    return this.sitesService.openHistory(request.user.id, id, historyId);
+  }
+
+  @Post(":id/history/:historyId/publish")
+  @UseGuards(JwtAuthGuard)
+  publishHistory(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @Param("historyId", ParseIntPipe) historyId: number,
+  ) {
+    return this.sitesService.publishHistory(request.user.id, id, historyId);
+  }
+
   @Post(":id/save")
   @UseGuards(JwtAuthGuard)
   save(

@@ -472,25 +472,134 @@ describe("GeminiSiteGenerator.editComponent", () => {
     expect(result.css).toBe("section{color:red}");
   });
 
-  it("섹션 추출에 실패하면 전체 HTML을 폴백으로 사용한다", async () => {
+  it("섹션 번호를 찾지 못하면 AI를 호출하지 않고 페이지를 그대로 둔다", async () => {
+    let calls = 0;
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async () => {
+        calls += 1;
+        return JSON.stringify({ html: "<main>수정됨</main>", css: "" });
+      },
+    );
+
+    await expect(
+      generator.editComponent({
+        html: "<main>단일 섹션</main>",
+        css: "",
+        sectionIndex: 99,
+        request: "바꿔줘",
+      }),
+    ).rejects.toThrow("수정할 위치를 찾지 못했습니다.");
+    expect(calls).toBe(0);
+  });
+
+  it("완전한 HTML 문서에서는 body 안의 헤더만 바꾼다", async () => {
     let capturedPrompt = "";
     const generator = new GeminiSiteGenerator(
       config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
       async ({ prompt }) => {
         capturedPrompt = prompt;
-        return JSON.stringify({ html: "<main>수정됨</main>", css: "" });
+        return JSON.stringify({ html: "<header>새 헤더</header>", css: "body{}" });
       },
     );
 
-    await generator.editComponent({
-      html: "<main>단일 섹션</main>",
-      css: "",
-      sectionIndex: 99, // 범위 벗어남
-      request: "바꿔줘",
+    const html =
+      '<!doctype html><html lang="ko"><head><title>인네이처</title></head><body><a>건너뛰기</a><header>옛 헤더</header><main>본문</main><footer>하단</footer></body></html>';
+
+    const result = await generator.editComponent({
+      html,
+      css: "body{}",
+      sectionIndex: 1,
+      request: "헤더 문구를 바꿔 줘",
     });
 
-    // 폴백: 전체 HTML을 전달
-    expect(capturedPrompt).toContain("<main>단일 섹션</main>");
+    expect(capturedPrompt).toContain("<header>옛 헤더</header>");
+    expect(capturedPrompt).not.toContain("<main>본문</main>");
+    expect(capturedPrompt).toContain("다른 요소는 지우지 마세요");
+    expect(result.html).toBe(
+      '<!doctype html><html lang="ko"><head><title>인네이처</title></head><body><a>건너뛰기</a><header>새 헤더</header><main>본문</main><footer>하단</footer></body></html>',
+    );
+  });
+
+  it("문서 맨 앞에 꺾쇠가 더 있어도 body 안의 헤더만 바꾼다", async () => {
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async () =>
+        JSON.stringify({ html: "<header>새 헤더</header>", css: "body{}" }),
+    );
+
+    const result = await generator.editComponent({
+      html: '<<!doctype html><html><head><title>인네이처</title></head><body><header>옛 헤더</header><main>본문</main></body></html>',
+      css: "body{}",
+      sectionIndex: 0,
+      request: "헤더 문구를 바꿔 줘",
+    });
+
+    expect(result.html).toBe(
+      '<<!doctype html><html><head><title>인네이처</title></head><body><header>새 헤더</header><main>본문</main></body></html>',
+    );
+  });
+
+  it("안쪽 섹션 번호가 없으면 바깥 섹션을 AI에게 보내지 않는다", async () => {
+    let calls = 0;
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async () => {
+        calls += 1;
+        return JSON.stringify({ html: "<header>지워짐</header>", css: "" });
+      },
+    );
+
+    await expect(
+      generator.editComponent({
+        html: "<header><div>로고</div></header><main>본문</main>",
+        css: "",
+        sectionIndex: 0,
+        innerSectionIndex: 3,
+        request: "메뉴를 숨겨 줘",
+      }),
+    ).rejects.toThrow("수정할 위치를 찾지 못했습니다.");
+    expect(calls).toBe(0);
+  });
+
+  it("응답의 맨 바깥 태그가 보낸 섹션과 다르면 페이지를 바꾸지 않는다", async () => {
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async () => JSON.stringify({ html: "<nav>숨김</nav>", css: "nav{}" }),
+    );
+
+    await expect(
+      generator.editComponent({
+        html: '<header><div class="header-inner"><span>로고</span><nav>메뉴</nav></div></header><main>본문</main>',
+        css: "body{}",
+        sectionIndex: 0,
+        innerSectionIndex: 0,
+        request: "접힌 메뉴는 숨겨 줘",
+      }),
+    ).rejects.toThrow("AI 응답이 수정 중인 구역과 다릅니다.");
+  });
+
+  it("완전한 문서의 헤더 안쪽만 바꾸고 본문은 남긴다", async () => {
+    const generator = new GeminiSiteGenerator(
+      config({ GOOGLE_GENERATIVE_AI_API_KEY: "test-key" }),
+      async () =>
+        JSON.stringify({
+          html: '<div class="header-inner"><span>로고</span><nav>숨김</nav></div>',
+          css: "nav{}",
+        }),
+    );
+
+    const result = await generator.editComponent({
+      html: '<!doctype html><html><head><title>인네이처</title></head><body><header><div class="header-inner"><span>로고</span><nav>메뉴</nav></div></header><main>본문</main></body></html>',
+      css: "body{}",
+      sectionIndex: 0,
+      innerSectionIndex: 0,
+      request: "접힌 메뉴는 숨겨 줘",
+    });
+
+    expect(result.html).toBe(
+      '<!doctype html><html><head><title>인네이처</title></head><body><header><div class="header-inner"><span>로고</span><nav>숨김</nav></div></header><main>본문</main></body></html>',
+    );
   });
 
   it("innerSectionIndex가 있으면 outer 안의 inner 섹션만 AI에 보낸다", async () => {

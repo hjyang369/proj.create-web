@@ -183,6 +183,49 @@ function replaceElementContent(element: string, newContent: string): string {
   return element.slice(0, openEnd + 1) + newContent + element.slice(closeStart);
 }
 
+function tagNameAt(html: string, index: number): string | null {
+  if (html[index] !== "<") return null;
+  const match = html.slice(index + 1).match(/^([a-zA-Z][a-zA-Z0-9-]*)/);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function shiftRanges(ranges: SectionRange[], offset: number): SectionRange[] {
+  return ranges.map((range) => ({
+    start: range.start + offset,
+    end: range.end + offset,
+  }));
+}
+
+/**
+ * 편집 화면과 같은 섹션 번호를 만든다.
+ * 완전한 문서는 브라우저가 html/head/body를 걷어 내므로 body 안의 태그만 센다.
+ * body가 없는 조각 HTML은 맨 바깥 태그를 그대로 센다.
+ */
+function editableSectionRanges(html: string): SectionRange[] {
+  const top = findHtmlSectionRanges(html);
+  const htmlSection = top.find((range) => tagNameAt(html, range.start) === "html");
+  if (!htmlSection) return top;
+
+  const htmlElement = html.slice(htmlSection.start, htmlSection.end);
+  const htmlInner = extractElementContent(htmlElement);
+  const htmlInnerStart = htmlSection.start + htmlElement.indexOf(">") + 1;
+  const insideHtml = shiftRanges(findHtmlSectionRanges(htmlInner), htmlInnerStart);
+  const bodySection = insideHtml.find((range) => tagNameAt(html, range.start) === "body");
+  if (!bodySection) return [];
+
+  const bodyElement = html.slice(bodySection.start, bodySection.end);
+  const bodyInner = extractElementContent(bodyElement);
+  const bodyInnerStart = bodySection.start + bodyElement.indexOf(">") + 1;
+  return shiftRanges(findHtmlSectionRanges(bodyInner), bodyInnerStart);
+}
+
+/** 조각의 맨 바깥 태그가 하나일 때만 그 이름을 반환한다. */
+function singleRootTag(html: string): string | null {
+  const ranges = findHtmlSectionRanges(html);
+  if (ranges.length !== 1) return null;
+  return tagNameAt(html, ranges[0].start);
+}
+
 export const GEMINI_TEXT_GENERATOR = Symbol("GEMINI_TEXT_GENERATOR");
 export const GEMINI_TIMEOUT_MS = 90_000;
 export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
@@ -391,15 +434,15 @@ export class GeminiSiteGenerator implements SiteGenerator {
     const model =
       this.config.get<string>("GEMINI_MODEL")?.trim() || DEFAULT_GEMINI_MODEL;
 
-    // 수정 대상 섹션만 추출 — AI에게 보내는 토큰을 줄임
-    const outerRanges = findHtmlSectionRanges(input.html);
+    // 화면과 같은 번호로 섹션을 자른다. 없으면 페이지 전체를 보내지 않는다.
+    const outerRanges = editableSectionRanges(input.html);
     const outerRange = outerRanges[input.sectionIndex];
+    if (!outerRange) {
+      throw new Error("수정할 위치를 찾지 못했습니다.");
+    }
 
-    // innerSectionIndex가 있으면 outer 섹션 안의 inner 섹션까지 좁혀 추출
     const useInner =
-      outerRange != null &&
-      input.innerSectionIndex != null &&
-      input.innerSectionIndex >= 0;
+      input.innerSectionIndex != null && input.innerSectionIndex >= 0;
 
     let sectionHtml: string;
     let innerRange: SectionRange | undefined;
@@ -407,17 +450,16 @@ export class GeminiSiteGenerator implements SiteGenerator {
     let innerContent: string | undefined;
 
     if (useInner) {
-      outerSection = input.html.slice(outerRange!.start, outerRange!.end);
+      outerSection = input.html.slice(outerRange.start, outerRange.end);
       innerContent = extractElementContent(outerSection);
       const innerRanges = findHtmlSectionRanges(innerContent);
       innerRange = innerRanges[input.innerSectionIndex!];
-      sectionHtml = innerRange
-        ? innerContent.slice(innerRange.start, innerRange.end)
-        : outerSection; // inner 추출 실패 → outer 전체 폴백
+      if (!innerRange) {
+        throw new Error("수정할 위치를 찾지 못했습니다.");
+      }
+      sectionHtml = innerContent.slice(innerRange.start, innerRange.end);
     } else {
-      sectionHtml = outerRange
-        ? input.html.slice(outerRange.start, outerRange.end)
-        : input.html; // outer 추출 실패 → 전체 HTML 폴백
+      sectionHtml = input.html.slice(outerRange.start, outerRange.end);
     }
 
     const kinds = await resolveInteractionKinds(
@@ -436,7 +478,8 @@ export class GeminiSiteGenerator implements SiteGenerator {
 
     const system = `You are a web developer editing a single section of a website page.
 Return ONLY a valid JSON object with "html" and "css" keys.
-"html" must contain only the modified section HTML (the section you were given, not the full page).
+"html" must contain the same section you were given, with only the requested change.
+받은 섹션과 같은 맨 바깥 태그를 유지하세요. 다른 요소는 지우지 마세요. 페이지 전체나 html 문서를 만들지 마세요.
 "css" must contain the complete updated page CSS.
 Do not wrap the section in any extra tags.
 Do not include any explanation or markdown code fences.
@@ -450,8 +493,8 @@ ${DESIGN_RULES}`;
       : "";
 
     const elementContext = input.elementHtml
-      ? `\nThe user clicked on this specific element:\n${input.elementHtml}\n\nModify that element according to the request below.`
-      : `\nModify the section according to the request below.`;
+      ? `\nThe user clicked on this specific element:\n${input.elementHtml}\n\n그 요소만 요청대로 고치세요. 섹션 안의 다른 요소는 지우지 마세요.`
+      : `\n섹션을 요청대로 고치세요. 요청과 관계없는 요소는 지우지 마세요.`;
 
     const prompt = `Current section HTML to modify:
 ${sectionHtml}
@@ -462,7 +505,7 @@ ${elementContext}${imageContext}
 User's modification request: ${input.request}
 ${rules ? `\n이 요청에 필요한 동작만 아래 방식으로 구현하세요.\n${rules}\n` : ""}
 Return a JSON object like: {"html":"...","css":"..."}
-"html" = the modified section HTML only (not the full page)
+"html" = 받은 섹션 전체. 맨 바깥 태그는 받은 섹션과 같아야 합니다. 다른 요소는 지우지 마세요.
 "css" = the complete updated page CSS`;
 
     const text = await this.complete({
@@ -497,11 +540,16 @@ Return a JSON object like: {"html":"...","css":"..."}
 
     result.html = keepAllowedActions(result.html);
 
+    const sentTag = singleRootTag(sectionHtml);
+    const receivedTag = singleRootTag(result.html);
+    if (!sentTag || sentTag !== receivedTag) {
+      throw new Error("AI 응답이 수정 중인 구역과 다릅니다.");
+    }
+
     // 수정된 섹션을 원래 위치에 끼워넣어 전체 HTML 복원
     let updatedHtml: string;
 
-    if (useInner && outerRange && innerRange && outerSection != null && innerContent != null) {
-      // inner → outer → 전체 HTML 순으로 조립
+    if (useInner && innerRange && outerSection != null && innerContent != null) {
       const newInnerContent =
         innerContent.slice(0, innerRange.start) +
         result.html +
@@ -511,13 +559,11 @@ Return a JSON object like: {"html":"...","css":"..."}
         input.html.slice(0, outerRange.start) +
         newOuterSection +
         input.html.slice(outerRange.end);
-    } else if (outerRange) {
+    } else {
       updatedHtml =
         input.html.slice(0, outerRange.start) +
         result.html +
         input.html.slice(outerRange.end);
-    } else {
-      updatedHtml = result.html;
     }
 
     return { html: updatedHtml, css: result.css };

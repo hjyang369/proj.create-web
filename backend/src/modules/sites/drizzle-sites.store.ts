@@ -7,6 +7,7 @@ import {
 import { sites } from "../../database/schema/sites.js";
 import { siteInputs } from "../../database/schema/site-inputs.js";
 import { siteImages } from "../../database/schema/site-images.js";
+import { siteEditHistory } from "../../database/schema/site-edit-history.js";
 import { sitePages } from "../../database/schema/site-pages.js";
 import type { GeneratedSitePage } from "./site-generation-response.js";
 import {
@@ -14,11 +15,19 @@ import {
   type StoredGenerationInput,
 } from "./site-input-record.js";
 import { readStoredPageContent } from "./site-page-content.js";
+import {
+  editorPages,
+  readHistorySnapshot,
+  snapshotFromPages,
+} from "./site-version.js";
 import type {
   CreateSiteRecord,
+  OwnedVersionList,
+  SavedDraftVersion,
   SitesStore,
   StoredOwnedSite,
   StoredSite,
+  StoredSitePageContent,
 } from "./sites.store.js";
 
 @Injectable()
@@ -166,31 +175,61 @@ export class DrizzleSitesStore implements SitesStore {
     userId: number,
     siteId: number,
   ): Promise<StoredOwnedSite | null> {
-    const rows = await this.db
+    const owned = await this.db
       .select({
         id: sites.id,
         userId: sites.userId,
         name: sites.name,
+        editingHistoryId: sites.editingHistoryId,
+        publishedHistoryId: sites.publishedHistoryId,
+        snapshot: siteEditHistory.snapshot,
+      })
+      .from(sites)
+      .leftJoin(
+        siteEditHistory,
+        and(
+          eq(siteEditHistory.id, sites.editingHistoryId),
+          eq(siteEditHistory.siteId, sites.id),
+        ),
+      )
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .limit(1);
+
+    const site = owned[0];
+    if (!site) {
+      return null;
+    }
+
+    const livePages = await this.loadOwnedPages(siteId);
+
+    return {
+      id: site.id,
+      userId: site.userId,
+      name: site.name,
+      editingHistoryId: site.editingHistoryId,
+      publishedHistoryId: site.publishedHistoryId,
+      pages: editorPages(
+        livePages,
+        site.editingHistoryId == null ? null : site.snapshot,
+      ),
+    };
+  }
+
+  private async loadOwnedPages(
+    siteId: number,
+  ): Promise<StoredSitePageContent[]> {
+    const rows = await this.db
+      .select({
         pageType: sitePages.pageType,
         pageOrder: sitePages.pageOrder,
         componentData: sitePages.componentData,
       })
-      .from(sites)
-      .leftJoin(sitePages, eq(sitePages.siteId, sites.id))
-      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .from(sitePages)
+      .where(eq(sitePages.siteId, siteId))
       .orderBy(asc(sitePages.pageOrder));
 
-    const first = rows[0];
-    if (!first) {
-      return null;
-    }
-
-    const pages: StoredOwnedSite["pages"] = [];
+    const pages: StoredSitePageContent[] = [];
     for (const row of rows) {
-      if (row.pageType == null || row.pageOrder == null) {
-        continue;
-      }
-
       const content = readStoredPageContent(row.componentData);
       if (!content) {
         continue;
@@ -204,12 +243,7 @@ export class DrizzleSitesStore implements SitesStore {
       });
     }
 
-    return {
-      id: first.id,
-      userId: first.userId,
-      name: first.name,
-      pages,
-    };
+    return pages;
   }
 
   private async loadOwnedInputRow(
@@ -406,7 +440,7 @@ export class DrizzleSitesStore implements SitesStore {
       };
       pages: GeneratedSitePage[];
     },
-  ): Promise<boolean> {
+  ): Promise<SavedDraftVersion | null> {
     if (draft.pages.length === 0) {
       throw new Error("생성된 페이지가 없습니다.");
     }
@@ -415,14 +449,17 @@ export class DrizzleSitesStore implements SitesStore {
 
     return this.db.transaction(async (tx) => {
       const owned = await tx
-        .select({ id: sites.id })
+        .select({
+          id: sites.id,
+          publishedHistoryId: sites.publishedHistoryId,
+        })
         .from(sites)
         .innerJoin(siteInputs, eq(siteInputs.siteId, sites.id))
         .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
         .limit(1);
 
       if (!owned[0]) {
-        return false;
+        return null;
       }
 
       await tx
@@ -500,16 +537,157 @@ export class DrizzleSitesStore implements SitesStore {
         })),
       );
 
+      const [historyResult] = await tx.insert(siteEditHistory).values({
+        siteId,
+        snapshot: snapshotFromPages(draft.pages),
+        createdAt: now,
+      });
+      const historyId = historyResult.insertId;
+
       await tx
         .update(sites)
         .set({
           name: draft.inputs.name,
-          status: "draft",
+          editingHistoryId: historyId,
           updatedAt: now,
         })
         .where(and(eq(sites.id, siteId), eq(sites.userId, userId)));
 
-      return true;
+      return {
+        historyId,
+        publishedHistoryId: owned[0].publishedHistoryId,
+      };
+    });
+  }
+
+  async listOwnedVersions(
+    userId: number,
+    siteId: number,
+  ): Promise<OwnedVersionList | null> {
+    const owned = await this.db
+      .select({
+        editingHistoryId: sites.editingHistoryId,
+        publishedHistoryId: sites.publishedHistoryId,
+      })
+      .from(sites)
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .limit(1);
+
+    const site = owned[0];
+    if (!site) {
+      return null;
+    }
+
+    const rows = await this.db
+      .select({
+        id: siteEditHistory.id,
+        createdAt: siteEditHistory.createdAt,
+      })
+      .from(siteEditHistory)
+      .where(eq(siteEditHistory.siteId, siteId))
+      .orderBy(desc(siteEditHistory.id));
+
+    return {
+      editingHistoryId: site.editingHistoryId,
+      publishedHistoryId: site.publishedHistoryId,
+      items: rows.map((row) => ({
+        id: row.id,
+        createdAt:
+          row.createdAt instanceof Date
+            ? row.createdAt
+            : new Date(row.createdAt),
+      })),
+    };
+  }
+
+  async openOwnedVersion(
+    userId: number,
+    siteId: number,
+    historyId: number,
+  ): Promise<{
+    pages: StoredSitePageContent[];
+    publishedHistoryId: number | null;
+  } | null> {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          snapshot: siteEditHistory.snapshot,
+          publishedHistoryId: sites.publishedHistoryId,
+        })
+        .from(siteEditHistory)
+        .innerJoin(sites, eq(sites.id, siteEditHistory.siteId))
+        .where(
+          and(
+            eq(siteEditHistory.id, historyId),
+            eq(siteEditHistory.siteId, siteId),
+            eq(sites.userId, userId),
+          ),
+        )
+        .limit(1);
+
+      const version = rows[0];
+      const pages = version ? readHistorySnapshot(version.snapshot) : null;
+      if (!version || !pages) {
+        return null;
+      }
+
+      await tx
+        .update(sites)
+        .set({
+          editingHistoryId: historyId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)));
+
+      return {
+        pages,
+        publishedHistoryId: version.publishedHistoryId,
+      };
+    });
+  }
+
+  async publishOwnedVersion(
+    userId: number,
+    siteId: number,
+    historyId: number,
+  ): Promise<{
+    editingHistoryId: number | null;
+    publishedHistoryId: number;
+  } | null> {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          editingHistoryId: sites.editingHistoryId,
+        })
+        .from(siteEditHistory)
+        .innerJoin(sites, eq(sites.id, siteEditHistory.siteId))
+        .where(
+          and(
+            eq(siteEditHistory.id, historyId),
+            eq(siteEditHistory.siteId, siteId),
+            eq(sites.userId, userId),
+          ),
+        )
+        .limit(1);
+
+      const version = rows[0];
+      if (!version) {
+        return null;
+      }
+
+      await tx
+        .update(sites)
+        .set({
+          publishedHistoryId: historyId,
+          status: "published",
+          updatedAt: new Date(),
+        })
+        .where(and(eq(sites.id, siteId), eq(sites.userId, userId)));
+
+      return {
+        editingHistoryId: version.editingHistoryId,
+        publishedHistoryId: historyId,
+      };
     });
   }
 
