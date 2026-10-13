@@ -4,6 +4,8 @@ import { SITE_INTERACTION_SCRIPT } from "./site-interactions.ts";
 import {
   buildEditablePreviewDocument,
   buildSitePreviewDocument,
+  previewPageChoices,
+  previewPathForPages,
   toPreviewAssetUrl,
   toPreviewHref,
 } from "./site-preview.ts";
@@ -227,5 +229,61 @@ describe("buildEditablePreviewDocument", () => {
     assert.match(document, /data\.fontSize/);
     assert.match(document, /data\.color/);
     assert.match(document, /data\.style/);
+  });
+
+  it("스크롤로 보이는 페이지를 편집 여부와 상관없이 부모에게 알린다", () => {
+    const document = buildEditablePreviewDocument([
+      { pageOrder: 1, html: "<h1>메인</h1>", css: "" },
+      { pageOrder: 2, html: "<h1>관리</h1>", css: "" },
+    ]);
+
+    const report = document.indexOf("function reportPage()");
+    const scroll = document.indexOf("addEventListener('scroll'", report);
+    const post = document.indexOf("crep-page", report);
+    const editingGate = document.indexOf("if(!editing)return;", report);
+
+    assert.ok(report >= 0);
+    assert.ok(scroll > report);
+    assert.ok(post > report);
+    assert.equal(editingGate, -1);
+  });
+
+  it("드롭다운에서 고른 페이지로 미리보기를 옮긴다", () => {
+    const document = buildEditablePreviewDocument([
+      { pageOrder: 1, html: "<h1>메인</h1>", css: "" },
+      { pageOrder: 2, html: "<h1>관리</h1>", css: "" },
+    ]);
+
+    const show = document.indexOf("crep-show-page");
+    const scroll = document.indexOf("scrollIntoView", show);
+
+    assert.ok(show >= 0);
+    assert.ok(scroll > show);
+  });
+});
+
+describe("previewPathForPages", () => {
+  const pages = [
+    { pageOrder: 1, pageType: "home" },
+    { pageOrder: 2, pageType: "admin" },
+    { pageOrder: 3, pageType: "About Us" },
+  ];
+
+  it("첫 페이지는 / 이고 나머지는 /페이지종류 다", () => {
+    assert.equal(previewPathForPages(pages, null), "/");
+    assert.equal(previewPathForPages(pages, 1), "/");
+    assert.equal(previewPathForPages(pages, 2), "/admin");
+    assert.equal(previewPathForPages(pages, 3), "/about-us");
+    assert.equal(previewPathForPages([], 1), "/");
+    assert.equal(previewPathForPages(pages, 99), "/");
+  });
+
+  it("드롭다운 목록은 첫 페이지를 home page로 보여 준다", () => {
+    assert.deepEqual(previewPageChoices(pages), [
+      { pageOrder: 1, label: "home page" },
+      { pageOrder: 2, label: "/admin" },
+      { pageOrder: 3, label: "/about-us" },
+    ]);
+    assert.deepEqual(previewPageChoices([]), []);
   });
 });

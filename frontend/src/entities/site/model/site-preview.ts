@@ -49,6 +49,47 @@ function rewriteUploadUrls(source: string, assetOrigin: string): string {
   return source.replace(/(^|["'(\s])\/uploads\//g, `$1${origin}/uploads/`);
 }
 
+/**
+ * 미리보기 주소창에 보여줄 경로.
+ * 첫 페이지는 `/`, 그 외는 `/admin`처럼 페이지 종류를 경로로 쓴다.
+ */
+export function previewPathForPages(
+  pages: { pageType: string; pageOrder: number }[],
+  pageOrder: number | null,
+): string {
+  if (pages.length === 0) return "/";
+
+  const ordered = [...pages].sort(
+    (left, right) => left.pageOrder - right.pageOrder,
+  );
+  const home = ordered[0];
+  const page =
+    ordered.find((item) => item.pageOrder === pageOrder) ?? home;
+  if (!home || page.pageOrder === home.pageOrder) return "/";
+
+  const slug = page.pageType
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "");
+  return slug ? `/${slug}` : "/";
+}
+
+/** 주소창 드롭다운. 첫 페이지는 home page, 나머지는 /admin 같은 경로다. */
+export function previewPageChoices(
+  pages: { pageType: string; pageOrder: number }[],
+): { pageOrder: number; label: string }[] {
+  return [...pages]
+    .sort((left, right) => left.pageOrder - right.pageOrder)
+    .map((page) => {
+      const path = previewPathForPages(pages, page.pageOrder);
+      return {
+        pageOrder: page.pageOrder,
+        label: path === "/" ? "home page" : path,
+      };
+    });
+}
+
 /** 직접 편집한 링크 값을 미리보기용으로 바꾼다. (사이트 안 .html 링크 → 앵커) */
 export function toPreviewHref(href: string): string {
   const match = href.match(
@@ -257,6 +298,47 @@ const CLICK_DETECTOR_SCRIPT = [
   "el.style.backgroundImage='url(\"'+data.backgroundImage+'\")';",
   "el.style.backgroundSize='cover';el.style.backgroundPosition='center';}",
   "}",
+  "}",
+  "});",
+  // 주소창용. 화면 위쪽에 걸린 페이지를 편집 여부와 상관없이 부모에게 알린다.
+  "function reportPage(){",
+  "if(window.innerHeight<1) return;",
+  "var nodes=document.querySelectorAll('[data-crep-s][data-crep-page]');",
+  "if(!nodes.length) return;",
+  "var seen={},order=[];",
+  "for(var i=0;i<nodes.length;i++){",
+  "var id=nodes[i].getAttribute('data-crep-page');",
+  "var rect=nodes[i].getBoundingClientRect();",
+  "if(!seen[id]){seen[id]={top:rect.top};order.push(id);}",
+  "else if(rect.top<seen[id].top){seen[id].top=rect.top;}",
+  "}",
+  "var focus=Math.min(96,window.innerHeight*0.2);",
+  "var current=order[0];",
+  "for(var j=0;j<order.length;j++){if(seen[order[j]].top<=focus)current=order[j];}",
+  "var pageOrder=parseInt(current,10);",
+  "if(pageOrder===shownPage) return;",
+  "shownPage=pageOrder;",
+  "window.parent.postMessage({type:'crep-page',pageOrder:pageOrder},'*');",
+  "}",
+  "var shownPage=-1;",
+  "var pageTimer=0;",
+  "window.addEventListener('scroll',function(){",
+  "if(pageTimer) return;",
+  "pageTimer=setTimeout(function(){pageTimer=0;reportPage();},80);",
+  "},true);",
+  "reportPage();",
+  "window.addEventListener('message',function(event){",
+  "if(event.source!==window.parent) return;",
+  "var data=event.data;",
+  "if(!data||data.type!=='crep-show-page') return;",
+  "var id=String(data.pageOrder);",
+  "var targets=document.querySelectorAll('[data-crep-s][data-crep-page]');",
+  "for(var n=0;n<targets.length;n++){",
+  "if(targets[n].getAttribute('data-crep-page')!==id) continue;",
+  "targets[n].scrollIntoView({block:'start'});",
+  "shownPage=-1;",
+  "reportPage();",
+  "return;",
   "}",
   "});",
   "})();",

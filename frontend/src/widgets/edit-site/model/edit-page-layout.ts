@@ -35,6 +35,8 @@ export type EditPageChrome = {
     groupLabel: string;
     editLabel: string;
     editHint: string;
+    previewLabel: string;
+    codeLabel: string;
     previewHint: string;
     previewMessage: string;
   };
@@ -88,6 +90,8 @@ export function describeEditPageChrome(): EditPageChrome {
     mode: {
       groupLabel: "편집 모드",
       editLabel: "편집",
+      previewLabel: "미리보기",
+      codeLabel: "코드",
       editHint: "좌클릭은 AI 수정, 우클릭은 직접 편집입니다.",
       previewHint: "버튼과 링크가 그대로 동작합니다.",
       previewMessage:
@@ -99,12 +103,13 @@ export function describeEditPageChrome(): EditPageChrome {
       previewLabel: "미리보기",
       emptyMessage: "아직 수정 내역이 없습니다.",
       pendingLabel: "작업 중",
-      inputPlaceholder: "수정 요청을 입력하세요.",
+      inputPlaceholder: "어떻게 수정할까요?",
       submitLabel: "보내기",
     },
   };
 }
 
-export function initialSidebarOpen(isWideScreen: boolean): boolean {
-  return isWideScreen;
+/** 사진처럼 기본은 채팅과 미리보기만 보여 준다. 직접 편집할 때 오른쪽 패널을 연다. */
+export function initialSidebarOpen(_isWideScreen: boolean): boolean {
+  return false;
 }

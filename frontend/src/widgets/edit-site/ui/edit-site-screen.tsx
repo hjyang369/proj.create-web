@@ -25,6 +25,8 @@ import {
   readEditableFromHtml,
   regenerateSiteDraft,
   saveSiteDraft,
+  previewPageChoices,
+  previewPathForPages,
   toPreviewAssetUrl,
   toPreviewHref,
   uploadSiteImage,
@@ -43,12 +45,11 @@ import {
   initialSidebarOpen,
 } from "../model/edit-page-layout";
 import { EditSiteAside, type SelectedComponent } from "./edit-site-aside";
-import {
-  EditSiteChatPanel,
-  type EditLogEntry,
-} from "./edit-site-chat-panel";
+import { EditSiteChatPanel, type EditLogEntry } from "./edit-site-chat-panel";
 import { EditSiteHistoryDialog } from "./edit-site-history-dialog";
 import { EditSiteManualPanel } from "./edit-site-manual-panel";
+import { EditSiteCodeView } from "./edit-site-code-view";
+import { EditSitePreviewBar, type SiteViewMode } from "./edit-site-preview-bar";
 
 /** 우클릭으로 고른, 직접 편집 중인 요소 */
 type ManualTarget = {
@@ -64,7 +65,10 @@ type ManualTarget = {
 };
 
 function samePath(left: number[], right: number[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function isIndexPath(value: unknown): value is number[] {
@@ -97,15 +101,24 @@ function describeDraftIssue(draft: ElementEdit): string | null {
     return "글자 색은 #112233 형식으로 입력해 주세요.";
   }
 
-  if (draft.fontWeight !== undefined && !isAllowedFontWeight(draft.fontWeight)) {
+  if (
+    draft.fontWeight !== undefined &&
+    !isAllowedFontWeight(draft.fontWeight)
+  ) {
     return "글자 굵기는 100부터 900까지 100 단위로 고를 수 있습니다.";
   }
 
-  if (draft.backgroundColor !== undefined && !isAllowedTextColor(draft.backgroundColor)) {
+  if (
+    draft.backgroundColor !== undefined &&
+    !isAllowedTextColor(draft.backgroundColor)
+  ) {
     return "배경색은 #112233 형식으로 입력해 주세요.";
   }
 
-  if (draft.backgroundImage !== undefined && !isAllowedBackgroundImage(draft.backgroundImage)) {
+  if (
+    draft.backgroundImage !== undefined &&
+    !isAllowedBackgroundImage(draft.backgroundImage)
+  ) {
     return "배경 이미지는 업로드한 사진이나 http, https 주소만 사용할 수 있습니다.";
   }
 
@@ -155,7 +168,8 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [regenerating, setRegenerating] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(true);
+  const [view, setView] = useState<SiteViewMode>("edit");
+  const editing = view === "edit";
   const editingRef = useRef(true);
   const previewFrameRef = useRef<HTMLIFrameElement>(null);
   const [selectedComponent, setSelectedComponent] =
@@ -182,7 +196,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   // 미리보기 iframe에 넣는 문서. 직접 편집을 "적용"할 때는 바꾸지 않아서
   // iframe이 다시 그려지지 않는다. (스크롤·깜빡임 유지)
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
-  const [manualTarget, setManualTargetState] = useState<ManualTarget | null>(null);
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
+  const [previewPageOrder, setPreviewPageOrder] = useState<number | null>(null);
+  const [manualTarget, setManualTargetState] = useState<ManualTarget | null>(
+    null,
+  );
   const manualTargetRef = useRef<ManualTarget | null>(null);
   const [manualDraft, setManualDraft] = useState<ElementEdit>({});
   const [manualNotice, setManualNotice] = useState<string | null>(null);
@@ -200,7 +218,8 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     );
   }, []);
 
-  const historyLocked = saving || editLoading || regenerating || busyHistoryId !== null;
+  const historyLocked =
+    saving || editLoading || regenerating || busyHistoryId !== null;
   const canStepBack = historyIndex > 0 && !historyLocked;
   const canStepForward =
     historyIndex < siteHistory.length - 1 && !historyLocked;
@@ -224,8 +243,17 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     previewFrameRef.current?.contentWindow?.postMessage(message, "*");
   }
 
+  function showPreviewPage(pageOrder: number) {
+    setPreviewPageOrder(pageOrder);
+    postFrame({ type: "crep-show-page", pageOrder });
+  }
+
   /** 미리보기 iframe의 요소에 수정값을 바로 보여준다. (저장·history와 무관) */
-  function postPreviewPatch(target: ManualTarget, edit: ElementEdit, restore = false) {
+  function postPreviewPatch(
+    target: ManualTarget,
+    edit: ElementEdit,
+    restore = false,
+  ) {
     const textMessage: Record<string, unknown> = {
       type: "crep-patch",
       pageOrder: target.pageOrder,
@@ -272,7 +300,10 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     if (edit.fontWeight !== undefined && isAllowedFontWeight(edit.fontWeight)) {
       textMessage.fontWeight = edit.fontWeight;
     }
-    if (edit.backgroundColor !== undefined && isAllowedTextColor(edit.backgroundColor)) {
+    if (
+      edit.backgroundColor !== undefined &&
+      isAllowedTextColor(edit.backgroundColor)
+    ) {
       backgroundMessage.backgroundColor = edit.backgroundColor;
     }
     if (
@@ -431,28 +462,54 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   // iframe 안 클릭(AI 수정)·우클릭(직접 편집) 메시지를 받는다.
   // 최신 상태를 쓰기 위해 처리 함수는 ref로 넘긴다.
   function handleFrameMessage(data: unknown) {
-    if (typeof data !== "object" || data === null || !editingRef.current) {
+    if (typeof data !== "object" || data === null) {
       return;
     }
 
-    const message = data as { type?: unknown };
+    const message = data as { type?: unknown; pageOrder?: unknown };
+
+    if (message.type === "crep-page") {
+      if (
+        typeof message.pageOrder === "number" &&
+        Number.isInteger(message.pageOrder)
+      ) {
+        setPreviewPageOrder(message.pageOrder);
+      }
+      return;
+    }
+
+    if (!editingRef.current) {
+      return;
+    }
 
     if (message.type === "crep-click") {
-      const { pageOrder, sectionIndex, innerSectionIndex, tagName, preview: text, elementHtml } =
-        data as {
-          pageOrder: number;
-          sectionIndex: number;
-          innerSectionIndex: number;
-          tagName: string;
-          preview: string;
-          elementHtml: string;
-        };
+      const {
+        pageOrder,
+        sectionIndex,
+        innerSectionIndex,
+        tagName,
+        preview: text,
+        elementHtml,
+      } = data as {
+        pageOrder: number;
+        sectionIndex: number;
+        innerSectionIndex: number;
+        tagName: string;
+        preview: string;
+        elementHtml: string;
+      };
       closeManualEdit(true);
-      setSelectedComponent({ pageOrder, sectionIndex, innerSectionIndex, tagName, preview: text, elementHtml });
+      setSelectedComponent({
+        pageOrder,
+        sectionIndex,
+        innerSectionIndex,
+        tagName,
+        preview: text,
+        elementHtml,
+      });
       setEditRequest("");
       setEditError(null);
       setUploadedImageUrl(null);
-      setSidebarOpen(true);
       return;
     }
 
@@ -512,7 +569,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       setUploadedImageUrl(null);
 
       const indexes = path as number[];
-      const backgroundIndexes = isIndexPath(rawBackgroundPath) ? rawBackgroundPath : indexes;
+      const backgroundIndexes = isIndexPath(rawBackgroundPath)
+        ? rawBackgroundPath
+        : indexes;
       const read = readEditableFromHtml(page.html, indexes);
       const backgroundRead = samePath(indexes, backgroundIndexes)
         ? read
@@ -525,8 +584,10 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         ? visibleTextStyle(
             {
               ...read,
-              backgroundColor: backgroundRead?.backgroundColor ?? read.backgroundColor,
-              backgroundImage: backgroundRead?.backgroundImage ?? read.backgroundImage,
+              backgroundColor:
+                backgroundRead?.backgroundColor ?? read.backgroundColor,
+              backgroundImage:
+                backgroundRead?.backgroundImage ?? read.backgroundImage,
             },
             {
               fontSize,
@@ -554,9 +615,12 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         path: indexes,
         backgroundPath: backgroundIndexes,
         backgroundTag:
-          typeof rawBackgroundTag === "string" ? rawBackgroundTag.toLowerCase() : "",
+          typeof rawBackgroundTag === "string"
+            ? rawBackgroundTag.toLowerCase()
+            : "",
         element,
-        styleAttr: typeof style === "string" && style.length <= 4000 ? style : "",
+        styleAttr:
+          typeof style === "string" && style.length <= 4000 ? style : "",
         backgroundStyleAttr:
           typeof backgroundStyle === "string" && backgroundStyle.length <= 4000
             ? backgroundStyle
@@ -607,7 +671,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       changeManualDraft({ backgroundImage: result.url });
     } catch (error: unknown) {
       setManualNotice(
-        error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.",
+        error instanceof Error
+          ? error.message
+          : "이미지 업로드에 실패했습니다.",
       );
     } finally {
       setManualUploading(false);
@@ -625,7 +691,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       changeManualDraft({ src: result.url });
     } catch (error: unknown) {
       setManualNotice(
-        error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.",
+        error instanceof Error
+          ? error.message
+          : "이미지 업로드에 실패했습니다.",
       );
     } finally {
       setManualUploading(false);
@@ -678,7 +746,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         html = result.html;
       }
       if (Object.keys(backgroundEdit).length > 0) {
-        const result = editHtmlElement(html, target.backgroundPath, backgroundEdit);
+        const result = editHtmlElement(
+          html,
+          target.backgroundPath,
+          backgroundEdit,
+        );
         if (!result.ok) {
           setManualNotice(result.message);
           return;
@@ -713,7 +785,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       setUploadedImageUrl(result.url);
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.";
+        error instanceof Error
+          ? error.message
+          : "이미지 업로드에 실패했습니다.";
       setEditError(message);
     } finally {
       setImageUploading(false);
@@ -750,9 +824,10 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         pageOrder: selectedComponent.pageOrder,
         pageType: page.pageType,
         sectionIndex: selectedComponent.sectionIndex,
-        innerSectionIndex: selectedComponent.innerSectionIndex >= 0
-          ? selectedComponent.innerSectionIndex
-          : undefined,
+        innerSectionIndex:
+          selectedComponent.innerSectionIndex >= 0
+            ? selectedComponent.innerSectionIndex
+            : undefined,
         html: page.html,
         css: page.css,
         elementHtml: selectedComponent.elementHtml,
@@ -762,7 +837,10 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
 
       // 미리보기 상태의 해당 페이지를 교체
       const updatedPages: typeof preview.site.pages = preview.site.pages.map(
-        (p) => (p.pageOrder === updatedPage.pageOrder ? (updatedPage as SiteEditorPage) : p),
+        (p) =>
+          p.pageOrder === updatedPage.pageOrder
+            ? (updatedPage as SiteEditorPage)
+            : p,
       );
       const updatedSite = { ...preview.site, pages: updatedPages };
       const requestLabel = editRequest.trim();
@@ -804,9 +882,10 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     );
   }
 
-  function changePreviewMode(nextEditing: boolean) {
+  function changeView(nextView: SiteViewMode) {
+    const nextEditing = nextView === "edit";
     editingRef.current = nextEditing;
-    setEditing(nextEditing);
+    setView(nextView);
     if (!nextEditing) {
       closeManualEdit(true);
       setSelectedComponent(null);
@@ -818,7 +897,12 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   }
 
   function openRegenerateForm() {
-    if (preview.kind !== "ready" || regenerating || saving || !preview.site.inputs) {
+    if (
+      preview.kind !== "ready" ||
+      regenerating ||
+      saving ||
+      !preview.site.inputs
+    ) {
       return;
     }
 
@@ -982,6 +1066,16 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     }
   }
 
+  function refreshPreview() {
+    if (!currentSite || historyLocked || currentSite.pages.length === 0) {
+      return;
+    }
+    // 문서 글자가 같아도 iframe을 다시 만들어 스크롤·버튼 상태를 처음으로 돌린다.
+    setPreviewPageOrder(null);
+    showSite(currentSite);
+    setPreviewReloadKey((key) => key + 1);
+  }
+
   async function saveCurrentDraft() {
     if (!canSave || preview.kind !== "ready" || !currentSite?.inputs) {
       return;
@@ -1023,6 +1117,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     <div className="relative flex h-dvh min-h-0 flex-col bg-white lg:flex-row">
       <EditSiteChatPanel
         chrome={chrome}
+        siteName={currentSite?.name ?? null}
         editLog={editLog}
         currentHistoryIndex={historyIndex}
         historyLocked={historyLocked}
@@ -1052,41 +1147,78 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
           setUploadedImageUrl(null);
         }}
       />
-      <section
-        aria-label="사이트 미리보기"
-        className="min-h-0 min-w-0 flex-1 bg-gray-50"
-      >
-        {preview.kind === "ready" &&
-        preview.site.pages.length > 0 &&
-        previewDoc !== null ? (
-          <iframe
-            ref={previewFrameRef}
-            title={`${preview.site.name} 미리보기`}
-            sandbox="allow-scripts"
-            srcDoc={previewDoc}
-            className="h-full w-full border-0 bg-white"
-            onLoad={() => postPreviewMode(editingRef.current)}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center px-6">
-            <p className="text-center text-sm text-gray-500">
-              {previewMessage(preview)}
-            </p>
-          </div>
-        )}
-      </section>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <EditSitePreviewBar
+          chrome={chrome}
+          pagePath={previewPathForPages(
+            currentSite?.pages ?? [],
+            previewPageOrder,
+          )}
+          pages={previewPageChoices(currentSite?.pages ?? [])}
+          onSelectPage={showPreviewPage}
+          view={view}
+          onChangeView={changeView}
+          canStepBack={canStepBack}
+          canStepForward={canStepForward}
+          onStepBack={handleStepBack}
+          onStepForward={handleStepForward}
+          canRefresh={
+            currentSite != null &&
+            currentSite.pages.length > 0 &&
+            !historyLocked
+          }
+          onRefresh={refreshPreview}
+          canOpenHistory={preview.kind === "ready"}
+          historyLocked={historyLocked}
+          onOpenHistory={() => void openHistoryPanel()}
+          canRegenerate={
+            preview.kind === "ready" && preview.site.inputs != null && !saving
+          }
+          regenerating={regenerating}
+          regenerateError={regenerateError}
+          onRegenerate={openRegenerateForm}
+          canSave={canSave}
+          saving={saving}
+          saveError={saveError}
+          onSave={() => void saveCurrentDraft()}
+        />
+        <section
+          aria-label="사이트 미리보기"
+          className="min-h-0 flex-1 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden m-2"
+        >
+          {preview.kind === "ready" &&
+          preview.site.pages.length > 0 &&
+          previewDoc !== null ? (
+            <>
+              <iframe
+                key={previewReloadKey}
+                ref={previewFrameRef}
+                title={`${preview.site.name} 미리보기`}
+                sandbox="allow-scripts"
+                srcDoc={previewDoc}
+                className={
+                  view === "code" ? "hidden" : "h-full w-full border-0 bg-white"
+                }
+                onLoad={() => postPreviewMode(editingRef.current)}
+              />
+              {view === "code" ? (
+                <EditSiteCodeView pages={preview.site.pages} />
+              ) : null}
+            </>
+          ) : (
+            <div className="flex h-full items-center justify-center px-6">
+              <p className="text-center text-sm text-gray-500">
+                {previewMessage(preview)}
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
       <EditSiteAside
         open={sidebarOpen}
         chrome={chrome}
         onToggle={() => setSidebarOpen((open) => !open)}
         editing={editing}
-        onChangeEditing={changePreviewMode}
-        canRegenerate={
-          preview.kind === "ready" && preview.site.inputs != null && !saving
-        }
-        regenerating={regenerating}
-        regenerateError={regenerateError}
-        onRegenerate={openRegenerateForm}
         manualPanel={
           manualTarget ? (
             <EditSiteManualPanel
@@ -1098,23 +1230,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
               imageUploading={manualUploading}
               onChange={changeManualDraft}
               onImageFile={(file) => void handleManualImageUpload(file)}
-              onBackgroundImageFile={(file) => void handleBackgroundImageUpload(file)}
+              onBackgroundImageFile={(file) =>
+                void handleBackgroundImageUpload(file)
+              }
               onApply={applyManualEdit}
               onCancel={() => closeManualEdit(true)}
             />
           ) : null
         }
-        onStepBack={handleStepBack}
-        onStepForward={handleStepForward}
-        canStepBack={canStepBack}
-        canStepForward={canStepForward}
-        onOpenHistory={() => void openHistoryPanel()}
-        canOpenHistory={preview.kind === "ready"}
-        historyLocked={historyLocked}
-        canSave={canSave}
-        saving={saving}
-        saveError={saveError}
-        onSave={() => void saveCurrentDraft()}
       />
       {historyOpen ? (
         <EditSiteHistoryDialog

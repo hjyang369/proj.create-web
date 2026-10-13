@@ -34,6 +34,8 @@ export type { SiteListItem } from "./model/site";
 export {
   buildSitePreviewDocument,
   buildEditablePreviewDocument,
+  previewPageChoices,
+  previewPathForPages,
   toPreviewAssetUrl,
   toPreviewHref,
 } from "./model/site-preview";

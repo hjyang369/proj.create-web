@@ -17,92 +17,11 @@ type EditSiteAsideProps = {
   chrome: EditPageChrome;
   onToggle: () => void;
   editing: boolean;
-  onChangeEditing: (editing: boolean) => void;
-  canRegenerate: boolean;
-  regenerating: boolean;
-  regenerateError: string | null;
-  onRegenerate: () => void;
   /** 우클릭 직접 편집 패널. 있으면 안내 문구 대신 보여준다. */
   manualPanel: ReactNode;
-  canStepBack: boolean;
-  canStepForward: boolean;
-  onStepBack: () => void;
-  onStepForward: () => void;
-  onOpenHistory: () => void;
-  canOpenHistory: boolean;
-  /** AI 수정·재생성·저장 중에는 히스토리 열기를 막는다 */
-  historyLocked: boolean;
-  canSave: boolean;
-  saving: boolean;
-  saveError: string | null;
-  onSave: () => void;
 };
 
-const iconButtonClassName = `flex shrink-0 items-center justify-center
-  h-10 w-10
-  text-gray-800
-  bg-white rounded-lg border border-gray-300
-  hover:bg-gray-100
-  disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
-
-const historyButtonClassName = `flex shrink-0 items-center justify-center
-  h-10 px-4
-  text-sm font-medium whitespace-nowrap text-gray-800
-  bg-white rounded-lg border border-gray-300
-  hover:bg-gray-100
-  disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
-
-const saveButtonClassName = `flex shrink-0 items-center justify-center
-  h-10 px-4
-  text-sm font-medium whitespace-nowrap text-white
-  bg-black rounded-lg
-  hover:bg-gray-900
-  disabled:cursor-not-allowed disabled:bg-gray-300 disabled:hover:bg-gray-300`;
-
-const regenerateButtonClassName = `flex items-center justify-center
-  h-10 w-full px-4
-  text-sm font-medium text-gray-800
-  bg-white rounded-lg border border-gray-300
-  hover:bg-gray-100
-  disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white`;
-
 const iconClassName = "h-5 w-5";
-
-function BackIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={iconClassName}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 14 4 9l5-5" />
-      <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11" />
-    </svg>
-  );
-}
-
-function ForwardIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={iconClassName}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m15 14 5-5-5-5" />
-      <path d="M20 9H9.5a5.5 5.5 0 0 0-5.5 5.5 5.5 5.5 0 0 0 5.5 5.5H13" />
-    </svg>
-  );
-}
 
 function SidebarIcon({
   open,
@@ -134,23 +53,7 @@ export function EditSiteAside({
   chrome,
   onToggle,
   editing,
-  onChangeEditing,
-  canRegenerate,
-  regenerating,
-  regenerateError,
-  onRegenerate,
   manualPanel,
-  canStepBack,
-  canStepForward,
-  onStepBack,
-  onStepForward,
-  onOpenHistory,
-  canOpenHistory,
-  historyLocked,
-  canSave,
-  saving,
-  saveError,
-  onSave,
 }: EditSiteAsideProps) {
   const edgeToggle = (
     <button
@@ -192,105 +95,11 @@ export function EditSiteAside({
     <aside
       className="relative flex shrink-0 flex-col
         w-full max-h-72
-        border-t border-gray-200 bg-gray-50
+        border-t border-gray-200 bg-white
         lg:w-80 lg:max-h-none lg:border-l lg:border-t-0"
     >
       {edgeToggle}
-      {chrome.controls === "sidebar" ? (
-        <div
-          className="flex shrink-0 items-center justify-between
-            gap-2 overflow-x-auto px-3 py-3
-            border-b border-gray-200"
-        >
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label={chrome.undo.backLabel}
-              disabled={!canStepBack}
-              className={iconButtonClassName}
-              onClick={onStepBack}
-            >
-              <BackIcon />
-            </button>
-            <button
-              type="button"
-              aria-label={chrome.undo.forwardLabel}
-              disabled={!canStepForward}
-              className={iconButtonClassName}
-              onClick={onStepForward}
-            >
-              <ForwardIcon />
-            </button>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              className={historyButtonClassName}
-              disabled={historyLocked || !canOpenHistory}
-              onClick={onOpenHistory}
-            >
-              {chrome.history.label}
-            </button>
-            <button
-              type="button"
-              className={saveButtonClassName}
-              disabled={!canSave}
-              onClick={onSave}
-            >
-              {saving ? "저장 중..." : chrome.save.label}
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {saveError ? (
-        <p role="alert" className="px-4 py-2 text-sm text-gray-800">
-          {saveError}
-        </p>
-      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-black">
-              {chrome.mode.editLabel}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              {editing ? chrome.mode.editHint : chrome.mode.previewHint}
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={editing}
-            aria-label={chrome.mode.groupLabel}
-            className={`relative shrink-0
-              h-6 w-11 rounded-full
-              focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black
-              ${editing ? "bg-black" : "bg-gray-300"}`}
-            onClick={() => onChangeEditing(!editing)}
-          >
-            <span
-              aria-hidden="true"
-              className={`absolute top-0.5 left-0.5
-                h-5 w-5 rounded-full bg-white transition-transform
-                ${editing ? "translate-x-5" : "translate-x-0"}`}
-            />
-          </button>
-        </div>
-        <div className="border-b border-gray-200 px-4 py-4">
-          <button
-            type="button"
-            disabled={!canRegenerate || regenerating}
-            className={regenerateButtonClassName}
-            onClick={onRegenerate}
-          >
-            {regenerating
-              ? chrome.regenerate.pendingLabel
-              : chrome.regenerate.label}
-          </button>
-          {regenerateError ? (
-            <p className="mt-3 text-sm text-gray-800">{regenerateError}</p>
-          ) : null}
-        </div>
         {editing && manualPanel ? (
           manualPanel
         ) : (
