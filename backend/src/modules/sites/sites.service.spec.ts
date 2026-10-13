@@ -1013,3 +1013,176 @@ describe('SitesService.publishHistory', () => {
     );
   });
 });
+
+describe('SitesService.listChatHistory', () => {
+  it('저장된 채팅이 없으면 빈 목록을 돌려준다', async () => {
+    const service = new SitesService(
+      {
+        async listOwnedChatHistory() {
+          return [];
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.listChatHistory(1, 4)).resolves.toEqual([]);
+  });
+
+  it('오래된 채팅부터 문장과 시간을 그대로 돌려준다', async () => {
+    const service = new SitesService(
+      {
+        async listOwnedChatHistory() {
+          return [
+            {
+              id: 1,
+              type: 'ai-edit',
+              label: '제목을 더 크게',
+              pageOrder: 2,
+              createdAt: new Date('2026-03-01T01:00:00.000Z'),
+            },
+            {
+              id: 2,
+              type: 'regenerate',
+              label: '다시 만들기',
+              pageOrder: null,
+              createdAt: new Date('2026-03-01T02:00:00.000Z'),
+            },
+          ];
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.listChatHistory(1, 4)).resolves.toEqual([
+      {
+        id: 1,
+        type: 'ai-edit',
+        label: '제목을 더 크게',
+        pageOrder: 2,
+        createdAt: '2026-03-01T01:00:00.000Z',
+      },
+      {
+        id: 2,
+        type: 'regenerate',
+        label: '다시 만들기',
+        pageOrder: null,
+        createdAt: '2026-03-01T02:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('내 사이트가 아니면 채팅 목록을 찾지 못했다고 알린다', async () => {
+    const service = new SitesService(
+      {
+        async listOwnedChatHistory() {
+          return null;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(service.listChatHistory(1, 9)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('SitesService.addChatEntry', () => {
+  it('AI 수정 요청을 같은 문장과 페이지 번호로 저장한다', async () => {
+    let saved:
+      | {
+          userId: number;
+          siteId: number;
+          type: string;
+          label: string;
+          pageOrder: number | null;
+        }
+      | undefined;
+    const service = new SitesService(
+      {
+        async addOwnedChatEntry(userId, siteId, entry) {
+          saved = { userId, siteId, ...entry };
+          return {
+            id: 8,
+            type: entry.type,
+            label: entry.label,
+            pageOrder: entry.pageOrder,
+            createdAt: new Date('2026-03-04T00:00:00.000Z'),
+          };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(
+      service.addChatEntry(1, 4, {
+        type: 'ai-edit',
+        label: '버튼을 검은색으로',
+        pageOrder: 1,
+      }),
+    ).resolves.toEqual({
+      id: 8,
+      type: 'ai-edit',
+      label: '버튼을 검은색으로',
+      pageOrder: 1,
+      createdAt: '2026-03-04T00:00:00.000Z',
+    });
+    expect(saved).toEqual({
+      userId: 1,
+      siteId: 4,
+      type: 'ai-edit',
+      label: '버튼을 검은색으로',
+      pageOrder: 1,
+    });
+  });
+
+  it('다시 만들기는 페이지 번호 없이 저장한다', async () => {
+    let pageOrder: number | null | undefined;
+    const service = new SitesService(
+      {
+        async addOwnedChatEntry(_userId, _siteId, entry) {
+          pageOrder = entry.pageOrder;
+          return {
+            id: 9,
+            type: entry.type,
+            label: entry.label,
+            pageOrder: entry.pageOrder,
+            createdAt: new Date('2026-03-05T00:00:00.000Z'),
+          };
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(
+      service.addChatEntry(1, 4, {
+        type: 'regenerate',
+        label: '다시 만들기',
+        pageOrder: null,
+      }),
+    ).resolves.toMatchObject({
+      type: 'regenerate',
+      pageOrder: null,
+    });
+    expect(pageOrder).toBeNull();
+  });
+
+  it('내 사이트가 아니면 채팅을 저장하지 않는다', async () => {
+    const service = new SitesService(
+      {
+        async addOwnedChatEntry() {
+          return null;
+        },
+      } as SitesStore,
+      unusedGenerator,
+    );
+
+    await expect(
+      service.addChatEntry(1, 9, {
+        type: 'ai-edit',
+        label: '제목 변경',
+        pageOrder: 1,
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

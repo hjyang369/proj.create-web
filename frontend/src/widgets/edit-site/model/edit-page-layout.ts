@@ -41,6 +41,11 @@ export type EditPageChrome = {
   editLog: {
     title: string;
     regenerateLabel: string;
+    previewLabel: string;
+    emptyMessage: string;
+    pendingLabel: string;
+    inputPlaceholder: string;
+    submitLabel: string;
   };
 };
 
@@ -91,6 +96,11 @@ export function describeEditPageChrome(): EditPageChrome {
     editLog: {
       title: "수정 내역",
       regenerateLabel: "초안으로 재생성",
+      previewLabel: "미리보기",
+      emptyMessage: "아직 수정 내역이 없습니다.",
+      pendingLabel: "작업 중",
+      inputPlaceholder: "수정 요청을 입력하세요.",
+      submitLabel: "보내기",
     },
   };
 }

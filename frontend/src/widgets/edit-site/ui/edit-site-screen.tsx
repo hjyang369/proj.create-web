@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/features/auth";
 import {
+  addSiteChatEntry,
   buildEditablePreviewDocument,
   diffElementEdit,
   editHtmlElement,
   editSiteComponent,
   elementEditOf,
   getMySite,
+  getSiteChatHistory,
   isAllowedBackgroundImage,
   isAllowedEditImageSrc,
   isAllowedEditLink,
@@ -35,11 +37,16 @@ import {
 } from "@/entities/site";
 import { CreateSiteForm, type SiteFormSubmit } from "@/features/create-site";
 import { API_URL } from "@/shared/api";
+import { storedChatsToEditLog } from "../model/edit-log-chat";
 import {
   describeEditPageChrome,
   initialSidebarOpen,
 } from "../model/edit-page-layout";
-import { EditSiteAside, type SelectedComponent, type EditLogEntry } from "./edit-site-aside";
+import { EditSiteAside, type SelectedComponent } from "./edit-site-aside";
+import {
+  EditSiteChatPanel,
+  type EditLogEntry,
+} from "./edit-site-chat-panel";
 import { EditSiteHistoryDialog } from "./edit-site-history-dialog";
 import { EditSiteManualPanel } from "./edit-site-manual-panel";
 
@@ -378,20 +385,31 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     let cancelled = false;
     setPreview({ kind: "loading" });
 
+    const chatHistory = getSiteChatHistory(id).catch(() => []);
+
     getMySite(id)
-      .then((site) => {
+      .then(async (site) => {
+        if (cancelled) {
+          return;
+        }
+        setSiteHistory([site]);
+        setHistoryIndex(0);
+        setSavedKey(snapshotKey(site));
+        setPreviewDoc(
+          site.pages.length > 0
+            ? buildEditablePreviewDocument(site.pages, API_URL)
+            : null,
+        );
+        manualTargetRef.current = null;
+        setManualTargetState(null);
+        setPreview({ kind: "ready", site });
+        const history = await chatHistory;
         if (!cancelled) {
-          setSiteHistory([site]);
-          setHistoryIndex(0);
-          setSavedKey(snapshotKey(site));
-          setPreviewDoc(
-            site.pages.length > 0
-              ? buildEditablePreviewDocument(site.pages, API_URL)
-              : null,
-          );
-          manualTargetRef.current = null;
-          setManualTargetState(null);
-          setPreview({ kind: "ready", site });
+          setEditLog((prev) => {
+            const stored = storedChatsToEditLog(history);
+            const session = prev.filter((entry) => entry.historyIndex >= 0);
+            return session.length === 0 ? stored : [...session, ...stored];
+          });
         }
       })
       .catch((error: unknown) => {
@@ -760,6 +778,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         },
         ...prev,
       ]);
+      void addSiteChatEntry(id, {
+        type: "ai-edit",
+        label: requestLabel,
+        pageOrder: requestPageOrder,
+      }).catch(() => {});
       setEditRequest("");
       setUploadedImageUrl(null);
       setSelectedComponent(null);
@@ -839,6 +862,11 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         },
         ...prev,
       ]);
+      void addSiteChatEntry(id, {
+        type: "regenerate",
+        label: chrome.editLog.regenerateLabel,
+        pageOrder: null,
+      }).catch(() => {});
       setFormOpen(false);
     } catch (error: unknown) {
       const message =
@@ -993,6 +1021,37 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
 
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-white lg:flex-row">
+      <EditSiteChatPanel
+        chrome={chrome}
+        editLog={editLog}
+        currentHistoryIndex={historyIndex}
+        historyLocked={historyLocked}
+        onEditLogJump={handleEditLogJump}
+        editLoading={editLoading}
+        regenerating={regenerating}
+        editRequest={editRequest}
+        onEditRequestChange={setEditRequest}
+        onSubmitEdit={() => void submitEditRequest()}
+        canSend={
+          editing &&
+          selectedComponent !== null &&
+          preview.kind === "ready" &&
+          !saving &&
+          !imageUploading
+        }
+        editError={editError}
+        selectedComponent={selectedComponent}
+        uploadedImageUrl={uploadedImageUrl}
+        imageUploading={imageUploading}
+        onImageFile={(file) => void handleImageUpload(file)}
+        onClearImage={() => setUploadedImageUrl(null)}
+        onCancelSelection={() => {
+          setSelectedComponent(null);
+          setEditRequest("");
+          setEditError(null);
+          setUploadedImageUrl(null);
+        }}
+      />
       <section
         aria-label="사이트 미리보기"
         className="min-h-0 min-w-0 flex-1 bg-gray-50"
@@ -1028,7 +1087,6 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         regenerating={regenerating}
         regenerateError={regenerateError}
         onRegenerate={openRegenerateForm}
-        selectedComponent={selectedComponent}
         manualPanel={
           manualTarget ? (
             <EditSiteManualPanel
@@ -1046,35 +1104,17 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
             />
           ) : null
         }
-        editRequest={editRequest}
-        onEditRequestChange={setEditRequest}
-        onSubmitEdit={() => void submitEditRequest()}
-        editLoading={editLoading}
-        editError={editError}
-        uploadedImageUrl={uploadedImageUrl}
-        imageUploading={imageUploading}
-        onImageFile={(file) => void handleImageUpload(file)}
-        onClearImage={() => setUploadedImageUrl(null)}
-        onCancelSelection={() => {
-          setSelectedComponent(null);
-          setEditRequest("");
-          setEditError(null);
-          setUploadedImageUrl(null);
-        }}
         onStepBack={handleStepBack}
         onStepForward={handleStepForward}
         canStepBack={canStepBack}
         canStepForward={canStepForward}
         onOpenHistory={() => void openHistoryPanel()}
         canOpenHistory={preview.kind === "ready"}
+        historyLocked={historyLocked}
         canSave={canSave}
         saving={saving}
         saveError={saveError}
         onSave={() => void saveCurrentDraft()}
-        editLog={editLog}
-        currentHistoryIndex={historyIndex}
-        historyLocked={historyLocked}
-        onEditLogJump={handleEditLogJump}
       />
       {historyOpen ? (
         <EditSiteHistoryDialog

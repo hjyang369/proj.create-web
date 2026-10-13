@@ -12,7 +12,9 @@ import { mkdir, writeFile } from "fs/promises";
 import {
   SITES_STORE,
   type CreateSiteRecord,
+  type NewChatEntry,
   type SitesStore,
+  type StoredChatEntry,
   type StoredSite,
   type StoredSitePageContent,
 } from "./sites.store.js";
@@ -69,7 +71,25 @@ export type PublishedSiteHistory = {
   publishedHistoryId: number;
 };
 
+export type SiteChatEntry = {
+  id: number;
+  type: StoredChatEntry["type"];
+  label: string;
+  pageOrder: number | null;
+  createdAt: string;
+};
+
 type SiteInputUpdate = Omit<CreateSiteRecord, "userId" | "logo" | "photos">;
+
+function toChatEntry(entry: StoredChatEntry): SiteChatEntry {
+  return {
+    id: entry.id,
+    type: entry.type,
+    label: entry.label,
+    pageOrder: entry.pageOrder,
+    createdAt: entry.createdAt.toISOString(),
+  };
+}
 
 function toInputFields(dto: CreateSiteDto): SiteInputUpdate {
   const optionalLinks: Record<string, string> = {};
@@ -563,6 +583,35 @@ export class SitesService {
     }
 
     return published;
+  }
+
+  async listChatHistory(
+    userId: number,
+    siteId: number,
+  ): Promise<SiteChatEntry[]> {
+    this.assertOwner(userId, siteId);
+
+    const rows = await this.sites.listOwnedChatHistory(userId, siteId);
+    if (!rows) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    return rows.map(toChatEntry);
+  }
+
+  async addChatEntry(
+    userId: number,
+    siteId: number,
+    entry: NewChatEntry,
+  ): Promise<SiteChatEntry> {
+    this.assertOwner(userId, siteId);
+
+    const saved = await this.sites.addOwnedChatEntry(userId, siteId, entry);
+    if (!saved) {
+      throw new NotFoundException("사이트를 찾을 수 없습니다.");
+    }
+
+    return toChatEntry(saved);
   }
 
   private assertOwner(userId: number, siteId: number): void {

@@ -1,3 +1,5 @@
+export { addSiteChatEntry, getSiteChatHistory } from "./api/chat-history";
+export type { ChatHistoryEntry, NewChatHistoryEntry } from "./api/chat-history";
 export { getMySite } from "./api/get-my-site";
 export {
   listSiteHistory,

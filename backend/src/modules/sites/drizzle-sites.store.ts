@@ -7,6 +7,7 @@ import {
 import { sites } from "../../database/schema/sites.js";
 import { siteInputs } from "../../database/schema/site-inputs.js";
 import { siteImages } from "../../database/schema/site-images.js";
+import { siteChatHistory } from "../../database/schema/site-chat-history.js";
 import { siteEditHistory } from "../../database/schema/site-edit-history.js";
 import { sitePages } from "../../database/schema/site-pages.js";
 import type { GeneratedSitePage } from "./site-generation-response.js";
@@ -22,9 +23,11 @@ import {
 } from "./site-version.js";
 import type {
   CreateSiteRecord,
+  NewChatEntry,
   OwnedVersionList,
   SavedDraftVersion,
   SitesStore,
+  StoredChatEntry,
   StoredOwnedSite,
   StoredSite,
   StoredSitePageContent,
@@ -825,5 +828,76 @@ export class DrizzleSitesStore implements SitesStore {
     });
 
     return { url: image.url };
+  }
+
+  async listOwnedChatHistory(
+    userId: number,
+    siteId: number,
+  ): Promise<StoredChatEntry[] | null> {
+    const owned = await this.db
+      .select({ id: sites.id })
+      .from(sites)
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .limit(1);
+
+    if (!owned[0]) {
+      return null;
+    }
+
+    const rows = await this.db
+      .select({
+        id: siteChatHistory.id,
+        type: siteChatHistory.type,
+        label: siteChatHistory.label,
+        pageOrder: siteChatHistory.pageOrder,
+        createdAt: siteChatHistory.createdAt,
+      })
+      .from(siteChatHistory)
+      .where(eq(siteChatHistory.siteId, siteId))
+      .orderBy(asc(siteChatHistory.id));
+
+    return rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      label: row.label,
+      pageOrder: row.pageOrder,
+      createdAt:
+        row.createdAt instanceof Date
+          ? row.createdAt
+          : new Date(row.createdAt),
+    }));
+  }
+
+  async addOwnedChatEntry(
+    userId: number,
+    siteId: number,
+    entry: NewChatEntry,
+  ): Promise<StoredChatEntry | null> {
+    const owned = await this.db
+      .select({ id: sites.id })
+      .from(sites)
+      .where(and(eq(sites.id, siteId), eq(sites.userId, userId)))
+      .limit(1);
+
+    if (!owned[0]) {
+      return null;
+    }
+
+    const createdAt = new Date();
+    const [result] = await this.db.insert(siteChatHistory).values({
+      siteId,
+      type: entry.type,
+      label: entry.label,
+      pageOrder: entry.pageOrder,
+      createdAt,
+    });
+
+    return {
+      id: result.insertId,
+      type: entry.type,
+      label: entry.label,
+      pageOrder: entry.pageOrder,
+      createdAt,
+    };
   }
 }

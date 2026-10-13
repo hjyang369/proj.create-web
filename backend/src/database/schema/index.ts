@@ -4,3 +4,4 @@ export * from "./site-inputs.js";
 export * from "./site-images.js";
 export * from "./site-pages.js";
 export * from "./site-edit-history.js";
+export * from "./site-chat-history.js";

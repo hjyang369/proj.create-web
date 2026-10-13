@@ -17,6 +17,7 @@ import { memoryStorage } from "multer";
 import type { AuthUser } from "../auth/auth-user.js";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { SitesService } from "./sites.service.js";
+import { CreateChatHistoryDto } from "./dto/create-chat-history.dto.js";
 import { CreateSiteDto } from "./dto/create-site.dto.js";
 import { UpdateSiteImagesDto } from "./dto/update-site-images.dto.js";
 import { EditComponentDto } from "./dto/edit-component.dto.js";
@@ -115,6 +116,29 @@ export class SitesController {
       keptPhotoUrls: dto.keptPhotoUrls ?? [],
       logoFile: files?.logo?.[0],
       photoFiles: files?.photos ?? [],
+    });
+  }
+
+  @Get(":id/chat-history")
+  @UseGuards(JwtAuthGuard)
+  listChatHistory(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+  ) {
+    return this.sitesService.listChatHistory(request.user.id, id);
+  }
+
+  @Post(":id/chat-history")
+  @UseGuards(JwtAuthGuard)
+  addChatEntry(
+    @Req() request: { user: AuthUser },
+    @Param("id", ParseIntPipe) id: number,
+    @Body() dto: CreateChatHistoryDto,
+  ) {
+    return this.sitesService.addChatEntry(request.user.id, id, {
+      type: dto.type,
+      label: dto.label,
+      pageOrder: dto.pageOrder ?? null,
     });
   }
 

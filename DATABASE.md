@@ -126,6 +126,22 @@ component_data JSON 구조 예시:
 
 ---
 
+## site_chat_history
+
+편집 화면의 채팅 목록. AI 수정 요청과 다시 만들기가 쌓인다.
+저장 버전인 `site_edit_history`와는 별도다. 미리보기 되돌리기에는 쓰지 않는다.
+
+- id: bigint, PK, auto increment
+- site_id: bigint, FK → sites.id
+- type: enum('ai-edit', 'regenerate') — AI 수정 요청 또는 다시 만들기
+- label: text — 사용자가 보낸 문장. 다시 만들기는 화면의 고정 문구
+- page_order: int, nullable — AI 수정일 때 어느 페이지인지. 다시 만들기는 비움
+- created_at: datetime
+
+목록은 `site_id`와 `id` 순서로 조회한다. 인덱스: `(site_id, id)`.
+
+---
+
 ## site_edit_history
 
 저장하기를 누를 때마다 추가되는 버전. 이미 있는 행은 수정하지 않는다.
@@ -163,6 +179,7 @@ sites
   1 : N  site_images
   1 : N  site_pages
   1 : N  site_edit_history
+  1 : N  site_chat_history
 ```
 
 ---

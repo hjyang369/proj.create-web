@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { EditPageChrome } from "../model/edit-page-layout";
 
 export type SelectedComponent = {
@@ -10,17 +10,6 @@ export type SelectedComponent = {
   tagName: string;
   preview: string;
   elementHtml: string;
-};
-
-export type EditLogEntry = {
-  /** 대응하는 siteHistory 인덱스 */
-  historyIndex: number;
-  type: "ai-edit" | "regenerate";
-  /** AI 요청 문장 또는 고정 문구 */
-  label: string;
-  /** ai-edit일 때만 — 어느 페이지인지 */
-  pageOrder?: number;
-  createdAt: Date;
 };
 
 type EditSiteAsideProps = {
@@ -33,36 +22,20 @@ type EditSiteAsideProps = {
   regenerating: boolean;
   regenerateError: string | null;
   onRegenerate: () => void;
-  selectedComponent: SelectedComponent | null;
-  /** 우클릭 직접 편집 패널. 있으면 AI 수정 패널 대신 보여준다. */
+  /** 우클릭 직접 편집 패널. 있으면 안내 문구 대신 보여준다. */
   manualPanel: ReactNode;
-  editRequest: string;
-  onEditRequestChange: (value: string) => void;
-  onSubmitEdit: () => void;
-  editLoading: boolean;
-  editError: string | null;
-  uploadedImageUrl: string | null;
-  imageUploading: boolean;
-  onImageFile: (file: File) => void;
-  onClearImage: () => void;
-  onCancelSelection: () => void;
   canStepBack: boolean;
   canStepForward: boolean;
   onStepBack: () => void;
   onStepForward: () => void;
   onOpenHistory: () => void;
   canOpenHistory: boolean;
+  /** AI 수정·재생성·저장 중에는 히스토리 열기를 막는다 */
+  historyLocked: boolean;
   canSave: boolean;
   saving: boolean;
   saveError: string | null;
   onSave: () => void;
-  /** AI 수정 내역 목록 (최신이 앞) */
-  editLog: EditLogEntry[];
-  /** 현재 보고 있는 historyIndex */
-  currentHistoryIndex: number;
-  /** AI 수정·재생성·저장 중에는 내역 이동을 막는다 */
-  historyLocked: boolean;
-  onEditLogJump: (entry: EditLogEntry) => void;
 };
 
 const iconButtonClassName = `flex shrink-0 items-center justify-center
@@ -131,49 +104,6 @@ function ForwardIcon() {
   );
 }
 
-function AiEditIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 8h12M8 2v12" />
-      <circle cx="8" cy="8" r="2.5" />
-    </svg>
-  );
-}
-
-function RegenerateIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M13 2.5A6 6 0 1 1 3.5 11" />
-      <path d="M1 7l2.5 4L7 8" />
-    </svg>
-  );
-}
-
-function formatEntryTime(date: Date): string {
-  return date.toLocaleTimeString("ko-KR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function SidebarIcon({
   open,
   className = iconClassName,
@@ -209,45 +139,19 @@ export function EditSiteAside({
   regenerating,
   regenerateError,
   onRegenerate,
-  selectedComponent,
   manualPanel,
-  editRequest,
-  onEditRequestChange,
-  onSubmitEdit,
-  editLoading,
-  editError,
-  uploadedImageUrl,
-  imageUploading,
-  onImageFile,
-  onClearImage,
-  onCancelSelection,
   canStepBack,
   canStepForward,
   onStepBack,
   onStepForward,
   onOpenHistory,
   canOpenHistory,
+  historyLocked,
   canSave,
   saving,
   saveError,
   onSave,
-  editLog,
-  currentHistoryIndex,
-  historyLocked,
-  onEditLogJump,
 }: EditSiteAsideProps) {
-  const editInputRef = useRef<HTMLTextAreaElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!selectedComponent) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => editInputRef.current?.focus(), 50);
-    return () => window.clearTimeout(timer);
-  }, [selectedComponent]);
-
   const edgeToggle = (
     <button
       type="button"
@@ -389,198 +293,12 @@ export function EditSiteAside({
         </div>
         {editing && manualPanel ? (
           manualPanel
-        ) : editing && selectedComponent ? (
-          <div className="border-b border-gray-200 px-4 py-4 flex flex-col gap-3">
-            <div>
-              <p className="text-xs font-medium text-gray-500 mb-1">
-                선택된 요소
-              </p>
-              <p className="text-xs text-gray-800 font-mono bg-gray-100 rounded px-2 py-1">
-                &lt;{selectedComponent.tagName}&gt;
-              </p>
-              {selectedComponent.preview ? (
-                <p className="mt-1 text-xs text-gray-500 truncate">
-                  {selectedComponent.preview}
-                </p>
-              ) : null}
-            </div>
-            <div className="flex flex-col gap-2">
-              <textarea
-                ref={editInputRef}
-                rows={3}
-                value={editRequest}
-                onChange={(event) => onEditRequestChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    (event.metaKey || event.ctrlKey)
-                  ) {
-                    onSubmitEdit();
-                  }
-                }}
-                disabled={editLoading}
-                placeholder="수정 요청을 입력하세요. (예: 배경을 어둡게 해줘)"
-                className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
-              />
-              {editError ? (
-                <p className="text-xs text-gray-800">{editError}</p>
-              ) : null}
-              {uploadedImageUrl ? (
-                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5">
-                  <img
-                    src={uploadedImageUrl}
-                    alt="업로드 이미지"
-                    className="h-8 w-8 rounded object-cover border border-gray-200"
-                  />
-                  <span className="flex-1 truncate text-xs text-gray-600">
-                    이미지 준비됨
-                  </span>
-                  <button
-                    type="button"
-                    onClick={onClearImage}
-                    className="text-gray-400 hover:text-gray-600"
-                    aria-label="이미지 제거"
-                  >
-                    <svg
-                      viewBox="0 0 16 16"
-                      className="h-3.5 w-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <path d="M3 3l10 10M13 3L3 13" />
-                    </svg>
-                  </button>
-                </div>
-              ) : null}
-              <div className="flex gap-2">
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      onImageFile(file);
-                    }
-                    event.target.value = "";
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={imageUploading || editLoading}
-                  onClick={() => imageInputRef.current?.click()}
-                  className="flex h-9 items-center justify-center rounded-lg border border-gray-300 px-3 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400"
-                  aria-label="이미지 업로드"
-                  title="이미지 업로드"
-                >
-                  {imageUploading ? (
-                    <svg
-                      className="h-4 w-4 animate-spin"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeDasharray="30 10"
-                      />
-                    </svg>
-                  ) : (
-                    <svg
-                      className="h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" />
-                      <path d="m21 15-5-5L5 21" />
-                    </svg>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  disabled={
-                    !editRequest.trim() || editLoading || imageUploading
-                  }
-                  onClick={onSubmitEdit}
-                  className="flex-1 flex items-center justify-center h-9 rounded-lg bg-black text-sm font-medium text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {editLoading ? "수정 중..." : "AI로 수정"}
-                </button>
-                <button
-                  type="button"
-                  disabled={editLoading || imageUploading}
-                  onClick={onCancelSelection}
-                  className="h-9 px-3 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100 disabled:text-gray-400"
-                >
-                  취소
-                </button>
-              </div>
-            </div>
-          </div>
         ) : (
           <p className="whitespace-pre-line px-4 py-4 text-sm text-gray-500">
             {editing ? chrome.sidebar.emptyMessage : chrome.mode.previewMessage}
           </p>
         )}
       </div>
-      {editLog.length > 0 ? (
-        <div className="shrink-0 max-h-48 overflow-y-auto border-t border-gray-200 px-4 py-4">
-          <p className="mb-2 text-xs font-medium text-gray-500">
-            {chrome.editLog.title}
-          </p>
-          <ul className="flex flex-col gap-0.5">
-            {editLog.map((entry, idx) => {
-              const isActive = entry.historyIndex === currentHistoryIndex;
-              return (
-                <li key={idx}>
-                  <button
-                    type="button"
-                    disabled={historyLocked}
-                    aria-current={isActive ? "true" : undefined}
-                    onClick={() => onEditLogJump(entry)}
-                    className={`flex w-full items-start gap-2
-                      rounded-lg px-3 py-2
-                      text-left
-                      hover:bg-gray-100
-                      disabled:cursor-not-allowed disabled:hover:bg-transparent
-                      ${isActive ? "bg-gray-100" : ""}`}
-                  >
-                    <span className="mt-0.5 shrink-0 text-gray-400">
-                      {entry.type === "regenerate" ? (
-                        <RegenerateIcon />
-                      ) : (
-                        <AiEditIcon />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={`block truncate text-sm ${
-                          isActive ? "font-medium text-black" : "text-gray-700"
-                        }`}
-                      >
-                        {entry.type === "regenerate"
-                          ? chrome.editLog.regenerateLabel
-                          : entry.label}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-gray-400">
-                        {formatEntryTime(entry.createdAt)}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
     </aside>
   );
 }

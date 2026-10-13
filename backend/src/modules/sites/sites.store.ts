@@ -153,6 +153,29 @@ export type SitesStore = {
     siteId: number,
     image: { url: string; originalName: string },
   ) => Promise<{ url: string } | null>;
+  listOwnedChatHistory: (
+    userId: number,
+    siteId: number,
+  ) => Promise<StoredChatEntry[] | null>;
+  addOwnedChatEntry: (
+    userId: number,
+    siteId: number,
+    entry: NewChatEntry,
+  ) => Promise<StoredChatEntry | null>;
+};
+
+export type StoredChatEntry = {
+  id: number;
+  type: "ai-edit" | "regenerate";
+  label: string;
+  pageOrder: number | null;
+  createdAt: Date;
+};
+
+export type NewChatEntry = {
+  type: "ai-edit" | "regenerate";
+  label: string;
+  pageOrder: number | null;
 };
 
 export const SITES_STORE = Symbol("SITES_STORE");
