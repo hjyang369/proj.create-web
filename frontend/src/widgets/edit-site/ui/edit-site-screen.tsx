@@ -49,7 +49,11 @@ import { EditSiteChatPanel, type EditLogEntry } from "./edit-site-chat-panel";
 import { EditSiteHistoryDialog } from "./edit-site-history-dialog";
 import { EditSiteManualPanel } from "./edit-site-manual-panel";
 import { EditSiteCodeView } from "./edit-site-code-view";
-import { EditSitePreviewBar, type SiteViewMode } from "./edit-site-preview-bar";
+import {
+  EditSitePreviewBar,
+  type PreviewViewport,
+  type SiteViewMode,
+} from "./edit-site-preview-bar";
 
 /** 우클릭으로 고른, 직접 편집 중인 요소 */
 type ManualTarget = {
@@ -169,6 +173,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [formOpen, setFormOpen] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
   const [view, setView] = useState<SiteViewMode>("edit");
+  const [viewport, setViewport] = useState<PreviewViewport>("desktop");
   const editing = view === "edit";
   const editingRef = useRef(true);
   const previewFrameRef = useRef<HTMLIFrameElement>(null);
@@ -1156,6 +1161,8 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
           )}
           pages={previewPageChoices(currentSite?.pages ?? [])}
           onSelectPage={showPreviewPage}
+          viewport={viewport}
+          onChangeViewport={setViewport}
           view={view}
           onChangeView={changeView}
           canStepBack={canStepBack}
@@ -1184,12 +1191,18 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         />
         <section
           aria-label="사이트 미리보기"
-          className="min-h-0 flex-1 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden m-2"
+          className="m-2 flex min-h-0 flex-1 justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
         >
           {preview.kind === "ready" &&
           preview.site.pages.length > 0 &&
           previewDoc !== null ? (
-            <>
+            <div
+              className={
+                viewport === "mobile" && view !== "code"
+                  ? "flex h-full w-full max-w-sm flex-col overflow-hidden border-x border-gray-300 bg-white"
+                  : "flex h-full w-full flex-col"
+              }
+            >
               <iframe
                 key={previewReloadKey}
                 ref={previewFrameRef}
@@ -1204,9 +1217,9 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
               {view === "code" ? (
                 <EditSiteCodeView pages={preview.site.pages} />
               ) : null}
-            </>
+            </div>
           ) : (
-            <div className="flex h-full items-center justify-center px-6">
+            <div className="flex h-full w-full items-center justify-center px-6">
               <p className="text-center text-sm text-gray-500">
                 {previewMessage(preview)}
               </p>

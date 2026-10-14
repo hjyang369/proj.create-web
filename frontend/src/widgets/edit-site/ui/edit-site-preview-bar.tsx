@@ -5,12 +5,15 @@ import { createPortal } from "react-dom";
 import type { EditPageChrome } from "../model/edit-page-layout";
 
 export type SiteViewMode = "preview" | "edit" | "code";
+export type PreviewViewport = "desktop" | "mobile";
 
 type EditSitePreviewBarProps = {
   chrome: EditPageChrome;
   pagePath: string;
   pages: { pageOrder: number; label: string }[];
   onSelectPage: (pageOrder: number) => void;
+  viewport: PreviewViewport;
+  onChangeViewport: (viewport: PreviewViewport) => void;
   view: SiteViewMode;
   onChangeView: (view: SiteViewMode) => void;
   canStepBack: boolean;
@@ -124,6 +127,94 @@ function ChevronDownIcon() {
     >
       <path d="m6 9 6 6 6-6" />
     </svg>
+  );
+}
+
+function MonitorIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={iconClassName}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8" />
+      <path d="M12 16v4" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={iconClassName}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="8" y="2" width="8" height="20" rx="2" />
+      <path d="M11 18h2" />
+    </svg>
+  );
+}
+
+function ViewportSwitch({
+  groupLabel,
+  desktopLabel,
+  mobileLabel,
+  viewport,
+  onChangeViewport,
+}: {
+  groupLabel: string;
+  desktopLabel: string;
+  mobileLabel: string;
+  viewport: PreviewViewport;
+  onChangeViewport: (viewport: PreviewViewport) => void;
+}) {
+  const options: { id: PreviewViewport; label: string; icon: ReactNode }[] = [
+    { id: "desktop", label: desktopLabel, icon: <MonitorIcon /> },
+    { id: "mobile", label: mobileLabel, icon: <PhoneIcon /> },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label={groupLabel}
+      className="flex shrink-0 items-center gap-0.5 rounded-full border border-gray-300 p-0.5"
+    >
+      {options.map((option) => {
+        const active = viewport === option.id;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={active}
+            aria-label={option.label}
+            title={option.label}
+            className={`flex items-center justify-center
+              h-7 w-7
+              rounded-full
+              ${
+                active
+                  ? "bg-black text-white"
+                  : "text-gray-700 hover:bg-gray-100"
+              }`}
+            onClick={() => onChangeViewport(option.id)}
+          >
+            {option.icon}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -457,6 +548,8 @@ export function EditSitePreviewBar({
   pagePath,
   pages,
   onSelectPage,
+  viewport,
+  onChangeViewport,
   view,
   onChangeView,
   canStepBack,
@@ -510,8 +603,15 @@ export function EditSitePreviewBar({
             <RedoIcon />
           </button>
         </div>
-        <div className="flex min-w-40 flex-1 justify-center px-2">
-          <div className="w-full max-w-sm">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 px-2">
+          <ViewportSwitch
+            groupLabel={chrome.viewport.groupLabel}
+            desktopLabel={chrome.viewport.desktopLabel}
+            mobileLabel={chrome.viewport.mobileLabel}
+            viewport={viewport}
+            onChangeViewport={onChangeViewport}
+          />
+          <div className="w-full min-w-40 max-w-sm">
             <PagePathField
               pagePath={pagePath}
               pages={pages}

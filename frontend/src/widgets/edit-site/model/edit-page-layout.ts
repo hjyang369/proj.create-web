@@ -40,6 +40,11 @@ export type EditPageChrome = {
     previewHint: string;
     previewMessage: string;
   };
+  viewport: {
+    groupLabel: string;
+    desktopLabel: string;
+    mobileLabel: string;
+  };
   editLog: {
     title: string;
     regenerateLabel: string;
@@ -96,6 +101,11 @@ export function describeEditPageChrome(): EditPageChrome {
       previewHint: "버튼과 링크가 그대로 동작합니다.",
       previewMessage:
         "편집이 꺼져 있습니다. 버튼과 링크를 누르면 그대로 동작합니다.",
+    },
+    viewport: {
+      groupLabel: "화면 크기",
+      desktopLabel: "PC 뷰",
+      mobileLabel: "모바일 뷰",
     },
     editLog: {
       title: "수정 내역",
