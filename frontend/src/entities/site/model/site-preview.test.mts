@@ -229,6 +229,8 @@ describe("buildEditablePreviewDocument", () => {
     assert.match(document, /data\.fontSize/);
     assert.match(document, /data\.color/);
     assert.match(document, /data\.style/);
+    assert.match(document, /createElement\('br'\)/);
+    assert.match(document, /brOnly\(el\)\|\|kids\(el\)\.length===0\)writeBreaks/);
   });
 
   it("스크롤로 보이는 페이지를 편집 여부와 상관없이 부모에게 알린다", () => {

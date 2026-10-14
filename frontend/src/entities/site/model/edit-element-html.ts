@@ -3,10 +3,12 @@
  *
  * - 요소 위치(path)는 "페이지 래퍼 아래에서 형제 순서"를 이어 붙인 배열이다.
  *   예: [1, 0, 2] = 두 번째 섹션의 첫 번째 자식의 세 번째 자식.
- *   미리보기에서는 script가 지워지므로 양쪽 모두 script는 세지 않는다.
+ *   완전한 문서는 미리보기와 같이 body 안만 센다. script는 양쪽 모두 세지 않는다.
  * - 원본은 부모 화면이 가진 page.html 이다. iframe 안 DOM은
  *   링크·이미지 주소가 바뀐 복사본이라 값을 거기서 읽지 않는다.
  */
+
+import { previewBodyParts } from "./site-preview";
 
 export type NodeLike = {
   nodeType: number;
@@ -415,16 +417,38 @@ export function findElementByPath(
   return current;
 }
 
-type TextTarget = { whole: true } | { whole: false; node: NodeLike };
+type TextTarget =
+  | { whole: true }
+  | { whole: false; node: NodeLike }
+  | { breaks: true };
+
+function tagNameOf(node: NodeLike): string {
+  const tag = (node as { tagName?: string }).tagName;
+  return typeof tag === "string" ? tag.toLowerCase() : "";
+}
+
+/** 자식 태그가 br뿐이면 줄바꿈 글자다. 아이콘이나 span이 있으면 아니다. */
+function isBreakOnly(element: ElementLike): boolean {
+  const children = elementChildren(element);
+  return (
+    children.length > 0 &&
+    children.every((child) => child.tagName.toLowerCase() === "br")
+  );
+}
 
 /**
  * 글자를 바꿀 자리를 찾는다.
  * - 자식 태그가 없으면 요소 전체 글자
- * - 자식 태그가 있으면 글자 조각이 딱 하나일 때만 그 조각 (아이콘 등을 지키기 위해)
+ * - 자식이 br뿐이면 줄을 나눈 글자
+ * - 그 외에는 글자 조각이 딱 하나일 때만 그 조각 (아이콘 등을 지키기 위해)
  */
 function findTextTarget(element: ElementLike): TextTarget | null {
   if (elementChildren(element).length === 0) {
     return { whole: true };
+  }
+
+  if (isBreakOnly(element)) {
+    return { breaks: true };
   }
 
   const pieces = Array.from(element.childNodes).filter(
@@ -434,9 +458,50 @@ function findTextTarget(element: ElementLike): TextTarget | null {
   return pieces.length === 1 ? { whole: false, node: pieces[0] } : null;
 }
 
+/** br마다 줄을 나누고, 줄 끝의 공백은 뺀다. */
+function readBreakText(element: ElementLike): string {
+  const lines = [""];
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === TEXT_NODE) {
+      lines[lines.length - 1] += node.nodeValue ?? "";
+    } else if (tagNameOf(node) === "br") {
+      lines.push("");
+    }
+  }
+
+  return lines.map((line) => line.trim()).join("\n");
+}
+
+function writeBreakLines(element: ElementLike, text: string): void {
+  const lines = text.split("\n");
+  const dom = element as Element;
+  if (typeof dom.replaceChildren === "function" && dom.ownerDocument) {
+    const nodes: Node[] = [];
+    lines.forEach((line, index) => {
+      if (index > 0) nodes.push(dom.ownerDocument.createElement("br"));
+      nodes.push(dom.ownerDocument.createTextNode(line));
+    });
+    dom.replaceChildren(...nodes);
+    return;
+  }
+
+  const nodes: NodeLike[] = [];
+  lines.forEach((line, index) => {
+    if (index > 0) {
+      nodes.push({ nodeType: 1, nodeValue: null, tagName: "br" } as NodeLike);
+    }
+    nodes.push({ nodeType: TEXT_NODE, nodeValue: line });
+  });
+  (element as { childNodes: NodeLike[] }).childNodes = nodes;
+}
+
 function readText(target: TextTarget | null, element: ElementLike): string | null {
   if (!target) {
     return null;
+  }
+
+  if ("breaks" in target) {
+    return readBreakText(element);
   }
 
   return target.whole ? (element.textContent ?? "") : (target.node.nodeValue ?? "");
@@ -601,8 +666,10 @@ export function applyElementEdit(
   }
 
   if (edit.text !== undefined && textTarget) {
-    if (textTarget.whole) {
-      element.textContent = edit.text;
+    // 엔터는 화면의 <br>이 되어야 하고, 엔터를 지우면 <br>도 빠져야 한다.
+    // textContent에 넣으면 줄바꿈이 공백으로 접혀 보이지 않는다.
+    if ("breaks" in textTarget || textTarget.whole) {
+      writeBreakLines(element, edit.text);
     } else {
       textTarget.node.nodeValue = edit.text;
     }
@@ -658,23 +725,33 @@ export function applyElementEdit(
   return { ok: true };
 }
 
-/** page.html 문자열을 미리보기와 같은 방식(래퍼 div 아래)으로 파싱한다. 브라우저 전용. */
-function parsePageRoot(html: string): Element | null {
+/**
+ * page.html을 미리보기와 같은 범위로 파싱한다. 브라우저 전용.
+ * 완전한 문서는 body 안만 래퍼에 넣어, 우클릭 번호가 head의 meta·title 때문에 밀리지 않게 한다.
+ */
+function parsePageRoot(html: string): {
+  root: Element;
+  before: string;
+  after: string;
+} | null {
+  const parts = previewBodyParts(html);
   const doc = new DOMParser().parseFromString(
-    `<!DOCTYPE html><html><body><div>${html}</div></body></html>`,
+    `<!DOCTYPE html><html><body><div>${parts.inner}</div></body></html>`,
     "text/html",
   );
+  const root = doc.body.firstElementChild;
+  if (!root) return null;
 
-  return doc.body.firstElementChild;
+  return { root, before: parts.before, after: parts.after };
 }
 
 export function readEditableFromHtml(
   html: string,
   path: number[],
 ): EditableElement | null {
-  const root = parsePageRoot(html);
+  const parsed = parsePageRoot(html);
 
-  return root ? readEditableElement(root, path) : null;
+  return parsed ? readEditableElement(parsed.root, path) : null;
 }
 
 export type EditHtmlResult =
@@ -686,15 +763,18 @@ export function editHtmlElement(
   path: number[],
   edit: ElementEdit,
 ): EditHtmlResult {
-  const root = parsePageRoot(html);
-  if (!root) {
+  const parsed = parsePageRoot(html);
+  if (!parsed) {
     return { ok: false, message: "페이지를 읽지 못했습니다." };
   }
 
-  const result = applyElementEdit(root, path, edit);
+  const result = applyElementEdit(parsed.root, path, edit);
   if (!result.ok) {
     return result;
   }
 
-  return { ok: true, html: root.innerHTML };
+  return {
+    ok: true,
+    html: parsed.before + parsed.root.innerHTML + parsed.after,
+  };
 }

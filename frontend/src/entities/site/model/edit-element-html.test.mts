@@ -13,7 +13,9 @@ import {
   isAllowedTextColor,
   normalizeBackgroundImage,
   visibleTextStyle,
+  editHtmlElement,
   readEditableElement,
+  readEditableFromHtml,
   type ElementLike,
   type NodeLike,
 } from "./edit-element-html.ts";
@@ -52,9 +54,7 @@ class FakeElement implements ElementLike {
   }
 
   get children(): FakeElement[] {
-    return this.childNodes.filter(
-      (node): node is FakeElement => node instanceof FakeElement,
-    );
+    return this.childNodes.filter((node) => node.nodeType === 1) as FakeElement[];
   }
 
   get textContent(): string {
@@ -226,11 +226,29 @@ describe("readEditableElement", () => {
     assert.equal(result?.text, "안녕하세요");
   });
 
-  it("글자 조각이 둘 이상이거나 글자 없는 구조 요소는 지원하지 않는다", () => {
+  it("br만 끼어 있으면 태그 종류와 상관없이 줄바꿈 글자로 읽는다", () => {
     const { root } = buildPage();
+    const paragraph = readEditableElement(root, [1, 1]);
 
-    assert.equal(readEditableElement(root, [1, 1])?.kind, "unsupported");
-    assert.equal(readEditableElement(root, [1, 1])?.text, null);
+    assert.equal(paragraph?.tagName, "p");
+    assert.equal(paragraph?.kind, "text");
+    assert.equal(paragraph?.text, "첫줄\n둘째줄");
+
+    const page = el("div", {}, [
+      el("h1", {}, ["\n  전통과 현대를 잇는", el("br"), "\n  결과 나무의 시간\n"]),
+      el("a", { href: "#x" }, ["첫", el("br"), "둘"]),
+      el("p", {}, ["하나", el("em", {}, ["강조"]), "둘"]),
+    ]);
+
+    assert.equal(
+      readEditableElement(page, [0])?.text,
+      "전통과 현대를 잇는\n결과 나무의 시간",
+    );
+    assert.equal(readEditableElement(page, [1])?.kind, "link");
+    assert.equal(readEditableElement(page, [1])?.text, "첫\n둘");
+    assert.equal(readEditableElement(page, [1])?.href, "#x");
+    assert.equal(readEditableElement(page, [2])?.kind, "unsupported");
+    assert.equal(readEditableElement(page, [2])?.text, null);
     assert.equal(readEditableElement(root, [1, 2])?.kind, "unsupported");
   });
 
@@ -296,6 +314,56 @@ describe("applyElementEdit", () => {
     assert.equal(title.textContent, "새 제목");
   });
 
+  it("엔터를 넣으면 br이 생기고, 엔터를 지우면 br도 사라진다", () => {
+    const root = el("div", {}, [
+      el("p", {}, ["안녕하세요"]),
+      el("h1", {}, ["전통과 현대를 잇는", el("br"), "결과 나무의 시간"]),
+    ]);
+
+    const added = applyElementEdit(root, [0], { text: "안녕\n하세요" });
+    const removed = applyElementEdit(root, [1], { text: "전통과 현대를 잇는 결과 나무의 시간" });
+
+    assert.deepEqual(added, { ok: true });
+    assert.deepEqual(removed, { ok: true });
+    assert.equal(readEditableElement(root, [0])?.text, "안녕\n하세요");
+    assert.equal(readEditableElement(root, [1])?.text, "전통과 현대를 잇는 결과 나무의 시간");
+
+    const paragraphBreaks = findElementByPath(root, [0])?.childNodes.filter(
+      (node) => node.nodeType === 1,
+    );
+    const headingBreaks = findElementByPath(root, [1])?.childNodes.filter(
+      (node) => node.nodeType === 1,
+    );
+    assert.equal(paragraphBreaks?.length, 1);
+    assert.equal((paragraphBreaks?.[0] as FakeElement).tagName.toLowerCase(), "br");
+    assert.equal(headingBreaks?.length, 0);
+  });
+
+  it("br만 있는 글자를 바꾸면 줄마다 br을 다시 넣고 다른 태그는 그대로 둔다", () => {
+    const root = el("div", {}, [
+      el("h2", {}, ["전통과 현대를 잇는", el("br"), "결과 나무의 시간"]),
+      el("a", { href: "#x" }, ["첫", el("br"), "둘"]),
+    ]);
+
+    const heading = applyElementEdit(root, [0], { text: "한 줄\n두 줄\n세 줄" });
+    const link = applyElementEdit(root, [1], { text: "위\n아래" });
+
+    assert.deepEqual(heading, { ok: true });
+    assert.deepEqual(link, { ok: true });
+    assert.equal(readEditableElement(root, [0])?.text, "한 줄\n두 줄\n세 줄");
+    assert.equal(readEditableElement(root, [1])?.text, "위\n아래");
+    assert.equal(readEditableElement(root, [1])?.href, "#x");
+
+    const breaks = findElementByPath(root, [0])?.childNodes.filter(
+      (node) => node.nodeType === 1,
+    );
+    assert.equal(breaks?.length, 2);
+    assert.equal(
+      breaks?.every((node) => (node as FakeElement).tagName.toLowerCase() === "br"),
+      true,
+    );
+  });
+
   it("a의 글자만 바꾸고 아이콘 같은 자식 태그는 유지한다", () => {
     const { root, button } = buildPage();
     const result = applyElementEdit(root, [0, 1], {
@@ -349,7 +417,7 @@ describe("applyElementEdit", () => {
     assert.equal(applyElementEdit(root, [1, 0], { href: "#a" }).ok, false);
     assert.equal(applyElementEdit(root, [1, 0], { src: "/uploads/a.png" }).ok, false);
     assert.equal(applyElementEdit(root, [0, 0, 0], { text: "글자" }).ok, false);
-    assert.equal(applyElementEdit(root, [1, 1], { text: "글자" }).ok, false);
+    assert.equal(applyElementEdit(root, [1, 2], { text: "글자" }).ok, false);
   });
 
   it("없는 위치는 거부한다", () => {
@@ -466,7 +534,7 @@ describe("applyElementEdit", () => {
 
     assert.equal(applyElementEdit(root, [0, 0, 0], { fontSize: "20px" }).ok, false);
     assert.equal(applyElementEdit(root, [0, 0, 0], { fontWeight: "700" }).ok, false);
-    assert.equal(applyElementEdit(root, [1, 1], { color: "#112233" }).ok, false);
+    assert.equal(applyElementEdit(root, [1, 2], { color: "#112233" }).ok, false);
     assert.equal(logo.getAttribute("style"), null);
   });
 });
@@ -647,5 +715,183 @@ describe("elementEditOf / diffElementEdit", () => {
     });
     assert.deepEqual(diffElementEdit(link, { text: "소개", href: "about.html" }), {});
     assert.deepEqual(diffElementEdit(link, {}), {});
+  });
+});
+
+const voidTags = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "source",
+  "track",
+  "wbr",
+]);
+
+class ParserElement {
+  nodeType = 1;
+  nodeValue: string | null = null;
+  tagName: string;
+  private attrs = new Map<string, string>();
+  childNodes: Array<ParserElement | { nodeType: number; nodeValue: string | null }> = [];
+
+  constructor(tagName: string) {
+    this.tagName = tagName.toUpperCase();
+  }
+
+  get children(): ParserElement[] {
+    return this.childNodes.filter((node) => node.nodeType === 1) as ParserElement[];
+  }
+
+  get firstElementChild(): ParserElement | null {
+    return this.children[0] ?? null;
+  }
+
+  get textContent(): string {
+    return this.childNodes
+      .map((node) => (node.nodeType === 3 ? (node.nodeValue ?? "") : (node as ParserElement).textContent))
+      .join("");
+  }
+
+  set textContent(value: string) {
+    this.childNodes = [{ nodeType: 3, nodeValue: value }];
+  }
+
+  get innerHTML(): string {
+    return this.childNodes
+      .map((node) => {
+        if (node.nodeType === 3) return node.nodeValue ?? "";
+        const element = node as ParserElement;
+        const name = element.tagName.toLowerCase();
+        const attrs = [...element.attrs].map(([key, attr]) => ` ${key}="${attr}"`).join("");
+        if (voidTags.has(name)) return `<${name}${attrs}>`;
+        return `<${name}${attrs}>${element.innerHTML}</${name}>`;
+      })
+      .join("");
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attrs.get(name) ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attrs.set(name, value);
+  }
+
+  removeAttribute(name: string): void {
+    this.attrs.delete(name);
+  }
+}
+
+function parseElements(html: string): ParserElement {
+  const root = new ParserElement("document");
+  const stack = [root];
+  const token = /<!--[\s\S]*?-->|<!doctype[^>]*>|<\/([a-zA-Z0-9]+)\s*>|<([a-zA-Z0-9]+)([^>]*)>/gi;
+  let cursor = 0;
+
+  for (const match of html.matchAll(token)) {
+    const index = match.index ?? 0;
+    if (index > cursor) {
+      stack.at(-1)?.childNodes.push({
+        nodeType: 3,
+        nodeValue: html.slice(cursor, index),
+      });
+    }
+    cursor = index + match[0].length;
+    if (match[0].startsWith("<!") || match[0].startsWith("<!--")) continue;
+
+    if (match[1]) {
+      const name = match[1].toLowerCase();
+      while (stack.length > 1 && stack.at(-1)?.tagName.toLowerCase() !== name) {
+        stack.pop();
+      }
+      if (stack.length > 1) stack.pop();
+      continue;
+    }
+
+    const element = new ParserElement(match[2] ?? "div");
+    const attrs = match[3] ?? "";
+    for (const attr of attrs.matchAll(
+      /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g,
+    )) {
+      element.setAttribute(attr[1] ?? "", attr[2] ?? attr[3] ?? "");
+    }
+    stack.at(-1)?.childNodes.push(element);
+    const selfClosing = attrs.trimEnd().endsWith("/");
+    if (!voidTags.has(element.tagName.toLowerCase()) && !selfClosing) {
+      stack.push(element);
+    }
+  }
+
+  if (cursor < html.length) {
+    stack.at(-1)?.childNodes.push({ nodeType: 3, nodeValue: html.slice(cursor) });
+  }
+
+  return root;
+}
+
+function findTag(element: ParserElement, tagName: string): ParserElement | null {
+  if (element.tagName.toLowerCase() === tagName) return element;
+  for (const child of element.children) {
+    const found = findTag(child, tagName);
+    if (found) return found;
+  }
+  return null;
+}
+
+function installDomParser(): void {
+  class DOMParser {
+    parseFromString(html: string): { body: ParserElement } {
+      const tree = parseElements(html);
+      return { body: findTag(tree, "body") ?? tree };
+    }
+  }
+
+  (globalThis as { DOMParser?: unknown }).DOMParser = DOMParser;
+}
+
+describe("완전한 문서의 우클릭 위치", () => {
+  const page = [
+    "<!doctype html><html><head>",
+    '<meta charset="utf-8"><title>T</title>',
+    "</head><body>",
+    "<a>skip</a><header>헤더</header><main><h1>제목</h1></main>",
+    "</body></html>",
+  ].join("");
+
+  it("body 안 번호로 제목을 찾고, 고치면 head는 그대로 둔다", () => {
+    installDomParser();
+
+    const found = readEditableFromHtml(page, [2, 0]);
+    assert.equal(found?.tagName, "h1");
+    assert.equal(found?.text, "제목");
+
+    const edited = editHtmlElement(page, [2, 0], { text: "새 제목" });
+    assert.equal(edited.ok, true);
+    if (!edited.ok) return;
+    assert.match(edited.html, /^<!doctype html>/);
+    assert.match(edited.html, /<title>T<\/title>/);
+    assert.match(edited.html, /<h1>새 제목<\/h1>/);
+    assert.equal(edited.html.includes("<meta"), true);
+  });
+
+  it("body가 없는 조각은 맨 바깥 태그 번호로 찾고 head를 붙이지 않는다", () => {
+    installDomParser();
+    const html = "<h1>제목</h1><p>본문</p>";
+
+    assert.equal(readEditableFromHtml(html, [0])?.tagName, "h1");
+
+    const edited = editHtmlElement(html, [0], { text: "새 제목" });
+    assert.equal(edited.ok, true);
+    if (!edited.ok) return;
+    assert.match(edited.html, /<h1>새 제목<\/h1>/);
+    assert.equal(edited.html.includes("<!doctype"), false);
+    assert.equal(edited.html.includes("<title>"), false);
   });
 });

@@ -34,14 +34,33 @@ function rewritePreviewSectionLinks(html: string): string {
   );
 }
 
-/** 편집 화면이 번호를 매기는 범위. 완전한 문서는 body 안만 남긴다. */
-function previewBodyHtml(html: string): string {
+/**
+ * 편집 화면이 번호를 매기는 범위.
+ * 완전한 문서는 body 안만 남긴다. body가 없으면 조각 HTML 전체를 쓴다.
+ * before/after는 저장할 때 head와 body 태그를 그대로 붙이기 위한 앞뒤다.
+ */
+export function previewBodyParts(html: string): {
+  before: string;
+  inner: string;
+  after: string;
+} {
   const bodyOpen = html.search(/<body\b/i);
-  if (bodyOpen < 0) return html;
+  if (bodyOpen < 0) return { before: "", inner: html, after: "" };
   const openEnd = html.indexOf(">", bodyOpen);
   const bodyClose = html.toLowerCase().lastIndexOf("</body>");
-  if (openEnd < 0 || bodyClose < openEnd) return html;
-  return html.slice(openEnd + 1, bodyClose);
+  if (openEnd < 0 || bodyClose < openEnd) {
+    return { before: "", inner: html, after: "" };
+  }
+
+  return {
+    before: html.slice(0, openEnd + 1),
+    inner: html.slice(openEnd + 1, bodyClose),
+    after: html.slice(bodyClose),
+  };
+}
+
+function previewBodyHtml(html: string): string {
+  return previewBodyParts(html).inner;
 }
 
 function rewriteUploadUrls(source: string, assetOrigin: string): string {
@@ -212,6 +231,8 @@ const CLICK_DETECTOR_SCRIPT = [
   "function elByPath(root,path){var cur=root;for(var i=0;i<path.length;i++){cur=kids(cur)[path[i]];if(!cur)return null;}return cur;}",
   // 글자를 바꿀 자리: 자식 태그가 없으면 'whole', 있으면 글자 조각이 딱 하나일 때만 그 조각
   "function textPiece(el){if(kids(el).length===0)return 'whole';var found=null,count=0;for(var i=0;i<el.childNodes.length;i++){var n=el.childNodes[i];if(n.nodeType===3&&n.nodeValue.trim()!==''){count++;found=n;}}return count===1?found:null;}",
+  "function brOnly(el){var list=kids(el);if(!list.length)return false;for(var i=0;i<list.length;i++){if(list[i].tagName!=='BR')return false;}return true;}",
+  "function writeBreaks(el,text){var lines=String(text).split('\\n');while(el.firstChild)el.removeChild(el.firstChild);for(var i=0;i<lines.length;i++){if(i)el.appendChild(document.createElement('br'));el.appendChild(document.createTextNode(lines[i]));}}",
   "var TEXT_TAGS={H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,P:1,SPAN:1,LI:1,BUTTON:1,LABEL:1,STRONG:1,EM:1,SMALL:1,BLOCKQUOTE:1,TD:1,TH:1,DT:1,DD:1,FIGCAPTION:1};",
   // img가 a 안에 있어도 img를 우선한다. 그 외에는 a, 글자 요소, 글자만 가진 요소 순서.
   "function solePicture(el){var list=kids(el);return list.length===1&&list[0].tagName==='IMG'?list[0]:null;}",
@@ -277,7 +298,7 @@ const CLICK_DETECTOR_SCRIPT = [
   "if(!root) return;",
   "var el=elByPath(root,data.path);",
   "if(!el) return;",
-  "if(typeof data.text==='string'){var piece=textPiece(el);if(piece==='whole')el.textContent=data.text;else if(piece)piece.nodeValue=data.text;}",
+  "if(typeof data.text==='string'){if(brOnly(el)||kids(el).length===0)writeBreaks(el,data.text);else{var piece=textPiece(el);if(piece==='whole')el.textContent=data.text;else if(piece)piece.nodeValue=data.text;}}",
   "if(typeof data.href==='string'&&!/^\\s*(javascript|data|vbscript):/i.test(data.href))el.setAttribute('href',data.href);",
   "if(typeof data.src==='string'&&!/^\\s*(javascript|data|vbscript):/i.test(data.src)){el.setAttribute('src',data.src);el.removeAttribute('srcset');}",
   "if(typeof data.alt==='string')el.setAttribute('alt',data.alt);",
