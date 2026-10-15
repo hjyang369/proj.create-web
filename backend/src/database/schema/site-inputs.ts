@@ -44,6 +44,7 @@ export const siteInputs = mysqlTable("site_inputs", {
   ]),
   pageCount: int("page_count").notNull().default(1),
   pageComponents: json("page_components"),
+  boardConfigs: json("board_configs"),
   referenceUrl: varchar("reference_url", { length: 500 }),
   optionalLinks: json("optional_links"),
   createdAt: datetime("created_at").notNull().default(new Date()),

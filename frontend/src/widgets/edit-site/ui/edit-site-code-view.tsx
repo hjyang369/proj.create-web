@@ -18,7 +18,7 @@ export function EditSiteCodeView({ pages }: { pages: CodePage[] }) {
 
   const [search, setSearch] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    () => new Set(["pages"]),
+    () => new Set(["pages", "boards"]),
   );
   const [openTabs, setOpenTabs] = useState<CodeFile[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);

@@ -18,6 +18,7 @@ import {
   type CharCount,
 } from "../model/char-count";
 import {
+  describeBoardNamesIssue,
   describeFieldFormat,
   describeSafeExternalLink,
   describeSafeReferenceLink,
@@ -41,6 +42,7 @@ type CreateSiteValues = {
   mood: string;
   pageCount: string;
   selectedPages: string[];
+  boardNames: string[];
   blogLink: string;
   websiteLink: string;
   instagramLink: string;
@@ -94,6 +96,7 @@ const emptyValues: CreateSiteValues = {
   mood: "",
   pageCount: "",
   selectedPages: [],
+  boardNames: [],
   blogLink: "",
   websiteLink: "",
   instagramLink: "",
@@ -146,6 +149,12 @@ export function CreateSiteForm({
         mood: initialValues.mood,
         pageCount: initialValues.pageCount,
         selectedPages: initialValues.selectedPages,
+        boardNames:
+          initialValues.boardNames.length > 0
+            ? initialValues.boardNames
+            : initialValues.selectedPages.includes("board")
+              ? [""]
+              : [],
         blogLink: initialValues.blogLink,
         websiteLink: initialValues.websiteLink,
         instagramLink: initialValues.instagramLink,
@@ -188,6 +197,7 @@ export function CreateSiteForm({
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<CreateSiteValues>({
     defaultValues: defaults,
@@ -220,10 +230,24 @@ export function CreateSiteForm({
     const keptPhotoUrls = previewPhotos.flatMap((photo) =>
       photo.existingUrl ? [photo.existingUrl] : [],
     );
+    const boardIssue = describeBoardNamesIssue(
+      values.selectedPages,
+      values.boardNames,
+    );
+    if (boardIssue) {
+      setSubmitError(boardIssue);
+      return;
+    }
+    const payload = {
+      ...values,
+      boardNames: values.selectedPages.includes("board")
+        ? values.boardNames.map((name) => name.trim())
+        : [],
+    };
     try {
       if (onSubmitForm) {
         await onSubmitForm({
-          values,
+          values: payload,
           logoFile,
           photoFiles,
           keepExistingLogo: keepExistingLogo && logoFile == null,
@@ -231,7 +255,7 @@ export function CreateSiteForm({
         });
         return;
       }
-      const { id } = await createSite(values, logoFile, photoFiles);
+      const { id } = await createSite(payload, logoFile, photoFiles);
       router.push(`/edit/${id}`);
     } catch (err) {
       setSubmitError(
@@ -597,12 +621,79 @@ export function CreateSiteForm({
                 <ChipGroup
                   options={PAGE_OPTIONS}
                   value={field.value}
-                  onChange={field.onChange}
+                  onChange={(next) => {
+                    const pages = Array.isArray(next) ? next : [];
+                    const hadBoard = field.value.includes("board");
+                    field.onChange(pages);
+                    if (
+                      pages.includes("board") &&
+                      !hadBoard &&
+                      getValues("boardNames").length === 0
+                    ) {
+                      setValue("boardNames", [""]);
+                    }
+                    if (!pages.includes("board") && hadBoard) {
+                      setValue("boardNames", []);
+                    }
+                  }}
                   multi={true}
                 />
               )}
             />
           </Field>
+
+          {values.selectedPages.includes("board") ? (
+            <div className="flex flex-col gap-4">
+              {values.boardNames.map((name, index) => (
+                <Field
+                  key={`board-${index}`}
+                  htmlFor={`board-name-${index}`}
+                  label={`게시판${index + 1}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      id={`board-name-${index}`}
+                      type="text"
+                      placeholder="예: 뉴스, 소식, 블로그"
+                      maxLength={100}
+                      className={inputCls}
+                      value={name}
+                      onChange={(event) => {
+                        const next = [...values.boardNames];
+                        next[index] = event.target.value;
+                        setValue("boardNames", next, { shouldDirty: true });
+                      }}
+                    />
+                    {values.boardNames.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setValue(
+                            "boardNames",
+                            values.boardNames.filter((_, item) => item !== index),
+                          )
+                        }
+                        className="h-11 shrink-0 px-3 text-sm text-gray-500 hover:text-black"
+                      >
+                        빼기
+                      </button>
+                    ) : null}
+                  </div>
+                </Field>
+              ))}
+              {values.boardNames.length < 5 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setValue("boardNames", [...values.boardNames, ""])
+                  }
+                  className="self-start h-10 px-4 text-sm text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  + 게시판 추가
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div>
             <p className="text-sm font-medium text-gray-800">링크</p>

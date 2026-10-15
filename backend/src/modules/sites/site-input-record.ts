@@ -16,6 +16,7 @@ export type StoredGenerationInput = {
   extraRequest: string | null;
   pageCount: number;
   pageComponents: unknown;
+  boardConfigs?: unknown;
   referenceUrl: string | null;
   optionalLinks: unknown;
 };
@@ -73,6 +74,32 @@ function readStringList(value: unknown): string[] | null {
   return items.length > 0 ? items : null;
 }
 
+function readBoardConfigs(
+  value: unknown,
+): Array<{ name: string; slug: string }> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const configs = value.flatMap((item) => {
+    if (typeof item !== "object" || item === null) {
+      return [];
+    }
+    const record = item as { name?: unknown; slug?: unknown };
+    if (
+      typeof record.name !== "string" ||
+      record.name.trim() === "" ||
+      typeof record.slug !== "string" ||
+      record.slug.trim() === ""
+    ) {
+      return [];
+    }
+    return [{ name: record.name.trim(), slug: record.slug.trim() }];
+  });
+
+  return configs.length > 0 ? configs : null;
+}
+
 function readLinks(value: unknown): Record<string, string> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
@@ -113,6 +140,7 @@ export type SiteInputForm = {
   youtubeLink: string;
   referenceLink: string;
   extraRequest: string;
+  boardNames: string[];
   logo: { url: string; originalName: string } | null;
   photos: Array<{ url: string; originalName: string }>;
 };
@@ -150,6 +178,7 @@ export function toSiteInputForm(record: CreateSiteRecord): SiteInputForm {
     youtubeLink: linkOrEmpty(record.optionalLinks, "youtube"),
     referenceLink: textOrEmpty(record.referenceUrl),
     extraRequest: textOrEmpty(record.extraRequest),
+    boardNames: record.boardConfigs?.map((board) => board.name) ?? [],
     logo: record.logo,
     photos: record.photos,
   };
@@ -204,6 +233,7 @@ export function toCreateSiteRecord(
     extraRequest: input.extraRequest,
     pageCount: input.pageCount,
     pageComponents: readStringList(input.pageComponents),
+    boardConfigs: readBoardConfigs(input.boardConfigs),
     referenceUrl: input.referenceUrl,
     optionalLinks: readLinks(input.optionalLinks),
     logo: logo

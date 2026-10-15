@@ -5,6 +5,10 @@ export type CodePage = {
   pageType: string;
   html: string;
   css: string;
+  /** 코드 트리 폴더. 없으면 pages */
+  folder?: string;
+  /** 파일 이름. 없으면 페이지 종류로 정한다 */
+  fileLabel?: string;
 };
 
 export type CodeFile = {
@@ -42,6 +46,8 @@ const PAGE_TYPE_LABEL: Record<string, string> = {
 };
 
 function pageLabel(page: CodePage): string {
+  const custom = page.fileLabel?.trim();
+  if (custom) return custom;
   return (
     PAGE_TYPE_LABEL[page.pageType] ??
     (page.pageType || `페이지${page.pageOrder + 1}`)
@@ -55,31 +61,39 @@ function pageLabel(page: CodePage): string {
  */
 export function buildCodeTree(pages: CodePage[]): CodeTree {
   const sorted = [...pages].sort((a, b) => a.pageOrder - b.pageOrder);
-  const files: CodeFile[] = [];
+  const folders = new Map<string, CodeFile[]>();
 
   for (const page of sorted) {
-    const label = pageLabel(page);
+    const folder = page.folder?.trim() || "pages";
+    const files = folders.get(folder) ?? [];
+    let label = pageLabel(page);
+    if (files.some((file) => file.name === `${label}.html`)) {
+      label = `${label}-${page.pageOrder}`;
+    }
     files.push({
-      path: `pages/${label}.html`,
+      path: `${folder}/${label}.html`,
       name: `${label}.html`,
-      folder: "pages",
+      folder,
       lang: "html",
       content: page.html,
     });
     if (page.css.trim() !== "") {
       files.push({
-        path: `pages/${label}.css`,
+        path: `${folder}/${label}.css`,
         name: `${label}.css`,
-        folder: "pages",
+        folder,
         lang: "css",
         content: page.css,
       });
     }
+    folders.set(folder, files);
   }
 
-  if (files.length === 0) return [];
-
-  return [{ path: "pages", name: "pages", files }];
+  return [...folders.entries()].map(([path, files]) => ({
+    path,
+    name: path,
+    files,
+  }));
 }
 
 /**

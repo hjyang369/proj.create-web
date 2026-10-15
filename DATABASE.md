@@ -55,6 +55,7 @@ MySQL + Drizzle ORM을 사용한다.
 - extra_request: text, nullable — 추가 요청
 - page_count: int, default 1 — 페이지 수
 - page_components: json, nullable — 선택된 페이지 구성 목록 (배열)
+- board_configs: json, nullable — 게시판 이름과 주소. 예: [{"name":"뉴스","slug":"news"}]
 - reference_url: varchar(500), nullable — 참고 사이트 링크 (선택)
 - optional_links: json, nullable — 링크 (위치, 블로그, SNS 등)
 - created_at: datetime
@@ -75,6 +76,15 @@ page_components JSON 구조 예시:
 
 ```json
 ["company_intro", "service_intro", "contact", "faq", "directions"]
+```
+
+board_configs JSON — 게시판을 골랐을 때만 저장한다. 페이지 구성 문자열 배열과 따로 둔다.
+
+```json
+[
+  { "name": "뉴스", "slug": "news" },
+  { "name": "소식", "slug": "notice" }
+]
 ```
 
 ---
@@ -169,6 +179,36 @@ snapshot JSON 구조 예시:
 
 ---
 
+## site_boards
+
+사이트가 가진 게시판. 소개 페이지 HTML과 별도다.
+
+- id: bigint, PK, auto increment
+- site_id: bigint, FK → sites.id
+- name: varchar(100) — 화면에 보이는 이름 (뉴스, 소식)
+- slug: varchar(100) — 주소용 이름 (news). 같은 사이트 안에서 중복 없음
+- board_order: int, default 0 — 메뉴 순서
+- created_at: datetime
+
+인덱스: unique `(site_id, slug)`, `(site_id, board_order)`
+
+---
+
+## site_posts
+
+게시판 글. 목록은 최신순으로 20개씩 조회한다.
+
+- id: bigint, PK, auto increment
+- board_id: bigint, FK → site_boards.id
+- title: varchar(255)
+- content: text
+- created_at: datetime
+- updated_at: datetime
+
+인덱스: `(board_id, id)`
+
+---
+
 ## 관계
 
 ```
@@ -180,6 +220,8 @@ sites
   1 : N  site_pages
   1 : N  site_edit_history
   1 : N  site_chat_history
+  1 : N  site_boards
+            1 : N  site_posts
 ```
 
 ---

@@ -4,8 +4,10 @@ import { SITE_INTERACTION_SCRIPT } from "./site-interactions.ts";
 import {
   buildEditablePreviewDocument,
   buildSitePreviewDocument,
+  editorPageChoices,
   previewPageChoices,
   previewPathForPages,
+  boardSlugFromHref,
   toPreviewAssetUrl,
   toPreviewHref,
 } from "./site-preview.ts";
@@ -18,6 +20,14 @@ describe("toPreviewHref / toPreviewAssetUrl", () => {
     assert.equal(toPreviewHref("https://example.com/a.html"), "https://example.com/a.html");
     assert.equal(toPreviewHref("mailto:a@b.com"), "mailto:a@b.com");
     assert.equal(toPreviewHref("#contact"), "#contact");
+  });
+
+  it("게시판 메뉴 주소만 슬러그로 읽는다", () => {
+    assert.equal(boardSlugFromHref("/board/news"), "news");
+    assert.equal(boardSlugFromHref("/board/notice-2/"), "notice-2");
+    assert.equal(boardSlugFromHref("/board/news/1"), null);
+    assert.equal(boardSlugFromHref("#services"), null);
+    assert.equal(boardSlugFromHref("https://example.com/board/news"), null);
   });
 
   it("/uploads 경로만 백엔드 주소를 붙인다", () => {
@@ -159,7 +169,7 @@ describe("buildEditablePreviewDocument", () => {
     assert.ok(inner.indexOf("<a>건너뛰기</a>") < inner.indexOf("<header>헤더</header>"));
   });
 
-  it("보기 모드에서는 클릭을 가로채지 않고, 편집 모드에서만 요소를 고른다", () => {
+  it("보기 모드에서는 요소를 고르지 않고, 게시판 링크만 부모에게 알린다", () => {
     const document = buildEditablePreviewDocument([
       {
         pageOrder: 1,
@@ -168,15 +178,31 @@ describe("buildEditablePreviewDocument", () => {
       },
     ]);
 
-    const gate = document.indexOf("if(!editing)return;");
-    const prevent = document.indexOf("e.preventDefault();");
+    const clickStart = document.indexOf("addEventListener('click'");
+    const click = document.slice(clickStart);
+    const gate = click.indexOf("if(!editing)return;");
+    const board = click.indexOf("crep-board");
 
     assert.match(document, /crep-set-mode/);
     assert.match(document, /html\.crep-editing/);
-    assert.ok(gate >= 0);
-    assert.ok(prevent > gate);
-    assert.match(document, /addEventListener\('click',function\(e\)\{/);
+    assert.ok(board >= 0);
+    assert.ok(gate > board);
+    assert.ok(click.slice(gate).includes("e.preventDefault();"));
     assert.match(document, /\},true\)/);
+  });
+
+  it("게시판 글쓰기 폼의 저장 클릭은 막지 않는다", () => {
+    const document = buildEditablePreviewDocument([
+      { pageOrder: 1, html: "<main></main>", css: "" },
+    ]);
+    const start = document.indexOf("closest('.crep-board')){");
+    const block = document.slice(start, start + 280);
+
+    assert.ok(start >= 0);
+    assert.ok(block.indexOf("data-crep-board-form") >= 0);
+    assert.ok(
+      block.indexOf("data-crep-board-form") < block.indexOf("e.preventDefault()"),
+    );
   });
 
   it("편집 모드에서만 우클릭을 가로채 위치를 부모에게 알린다", () => {
@@ -250,6 +276,24 @@ describe("buildEditablePreviewDocument", () => {
     assert.equal(editingGate, -1);
   });
 
+  it("글쓰기 버튼은 크랩 AI 글쓰기 주소를 새 탭으로 연다", () => {
+    const document = buildEditablePreviewDocument(
+      [{ pageOrder: 1, html: "<main></main>", css: "" }],
+      undefined,
+      "http://localhost:3000/write?siteId=10&slug=",
+    );
+
+    assert.match(document, /http:\/\/localhost:3000\/write\?siteId=10&slug=/);
+    assert.match(document, /function openCrepWrite/);
+    assert.match(document, /crepWriteBase\+encodeURIComponent/);
+    assert.match(document, /window\.open\(url,'_blank'\)/);
+    assert.match(document, /view==='manage'&&openCrepWrite/);
+    const writeOpen = document.indexOf("target.view==='write'&&openCrepWrite");
+    const boardMessage = document.indexOf("type:'crep-board'", writeOpen);
+    assert.ok(writeOpen >= 0);
+    assert.ok(boardMessage > writeOpen);
+  });
+
   it("드롭다운에서 고른 페이지로 미리보기를 옮긴다", () => {
     const document = buildEditablePreviewDocument([
       { pageOrder: 1, html: "<h1>메인</h1>", css: "" },
@@ -287,5 +331,37 @@ describe("previewPathForPages", () => {
       { pageOrder: 3, label: "/about-us" },
     ]);
     assert.deepEqual(previewPageChoices([]), []);
+  });
+
+  it("게시판은 일반 페이지 뒤에 /board/주소로 붙는다", () => {
+    assert.deepEqual(
+      editorPageChoices(pages, [{ slug: "news" }, { slug: "notice" }]),
+      [
+        { id: "page:1", label: "home page" },
+        { id: "page:2", label: "/admin" },
+        { id: "page:3", label: "/about-us" },
+        { id: "board:news", label: "/board/news" },
+        { id: "board:notice", label: "/board/notice" },
+      ],
+    );
+  });
+
+  it("작성된 글은 /board/게시판/글번호로 붙는다", () => {
+    assert.deepEqual(
+      editorPageChoices(
+        [{ pageOrder: 1, pageType: "home" }],
+        [{ slug: "news" }],
+        [
+          { slug: "news", id: 3 },
+          { slug: "news", id: 8 },
+        ],
+      ),
+      [
+        { id: "page:1", label: "home page" },
+        { id: "board:news", label: "/board/news" },
+        { id: "post:news:8", label: "/board/news/8" },
+        { id: "post:news:3", label: "/board/news/3" },
+      ],
+    );
   });
 });

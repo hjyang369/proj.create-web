@@ -5,3 +5,5 @@ export * from "./site-images.js";
 export * from "./site-pages.js";
 export * from "./site-edit-history.js";
 export * from "./site-chat-history.js";
+export * from "./site-boards.js";
+export * from "./site-posts.js";

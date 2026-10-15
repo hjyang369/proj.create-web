@@ -200,6 +200,7 @@ export class SitesController {
         youtubeLink: dto.inputs.youtubeLink,
         referenceLink: dto.inputs.referenceLink,
         extraRequest: dto.inputs.extraRequest,
+        boardNames: dto.inputs.boardNames ?? [],
         logo: dto.inputs.logo,
         photos: dto.inputs.photos ?? [],
       },

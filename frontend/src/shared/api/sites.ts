@@ -14,6 +14,7 @@ export interface CreateSitePayload {
   mood: string;
   pageCount: string;
   selectedPages: string[];
+  boardNames: string[];
   blogLink: string;
   websiteLink: string;
   instagramLink: string;

@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsEnum,
   IsInt,
@@ -111,6 +112,17 @@ export class CreateSiteDto {
   @IsArray()
   @IsString({ each: true })
   selectedPages: string[] = [];
+
+  /** 게시판 칩을 켠 뒤 적는 이름. 예: 뉴스, 소식 */
+  @IsOptional()
+  @Transform(({ value }) =>
+    Array.isArray(value) ? value : value ? [value] : [],
+  )
+  @IsArray()
+  @ArrayMaxSize(5, { message: "게시판은 5개까지 만들 수 있습니다." })
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  boardNames: string[] = [];
 
   /** 링크 필드들 */
   @IsOptional()

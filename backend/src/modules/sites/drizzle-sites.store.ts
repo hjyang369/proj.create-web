@@ -10,6 +10,7 @@ import { siteImages } from "../../database/schema/site-images.js";
 import { siteChatHistory } from "../../database/schema/site-chat-history.js";
 import { siteEditHistory } from "../../database/schema/site-edit-history.js";
 import { sitePages } from "../../database/schema/site-pages.js";
+import { siteBoards } from "../../database/schema/site-boards.js";
 import type { GeneratedSitePage } from "./site-generation-response.js";
 import {
   toCreateSiteRecord,
@@ -97,6 +98,7 @@ export class DrizzleSitesStore implements SitesStore {
         extraRequest: data.extraRequest ?? null,
         pageCount: data.pageCount,
         pageComponents: data.pageComponents ?? null,
+        boardConfigs: data.boardConfigs ?? null,
         referenceUrl: data.referenceUrl ?? null,
         optionalLinks: data.optionalLinks ?? null,
         createdAt: now,
@@ -138,6 +140,8 @@ export class DrizzleSitesStore implements SitesStore {
       if (imageRows.length > 0) {
         await tx.insert(siteImages).values(imageRows);
       }
+
+      await ensureSiteBoards(tx, siteId, data.boardConfigs, now);
 
       return { id: siteId };
     });
@@ -270,6 +274,7 @@ export class DrizzleSitesStore implements SitesStore {
         extraRequest: siteInputs.extraRequest,
         pageCount: siteInputs.pageCount,
         pageComponents: siteInputs.pageComponents,
+        boardConfigs: siteInputs.boardConfigs,
         referenceUrl: siteInputs.referenceUrl,
         optionalLinks: siteInputs.optionalLinks,
       })
@@ -324,11 +329,16 @@ export class DrizzleSitesStore implements SitesStore {
           extraRequest: data.extraRequest,
           pageCount: data.pageCount,
           pageComponents: data.pageComponents,
+          ...(data.boardConfigs
+            ? { boardConfigs: data.boardConfigs }
+            : {}),
           referenceUrl: data.referenceUrl,
           optionalLinks: data.optionalLinks,
           updatedAt: now,
         })
         .where(eq(siteInputs.siteId, siteId));
+
+      await ensureSiteBoards(tx, siteId, data.boardConfigs, now);
 
       await tx
         .update(sites)
@@ -482,11 +492,16 @@ export class DrizzleSitesStore implements SitesStore {
           extraRequest: draft.inputs.extraRequest,
           pageCount: draft.inputs.pageCount,
           pageComponents: draft.inputs.pageComponents,
+          ...(draft.inputs.boardConfigs
+            ? { boardConfigs: draft.inputs.boardConfigs }
+            : {}),
           referenceUrl: draft.inputs.referenceUrl,
           optionalLinks: draft.inputs.optionalLinks,
           updatedAt: now,
         })
         .where(eq(siteInputs.siteId, siteId));
+
+      await ensureSiteBoards(tx, siteId, draft.inputs.boardConfigs, now);
 
       await tx.delete(siteImages).where(eq(siteImages.siteId, siteId));
 
@@ -899,5 +914,39 @@ export class DrizzleSitesStore implements SitesStore {
       pageOrder: entry.pageOrder,
       createdAt,
     };
+  }
+}
+
+async function ensureSiteBoards(
+  tx: Pick<AppDatabase, "select" | "insert">,
+  siteId: number,
+  configs: Array<{ name: string; slug: string }> | null | undefined,
+  now: Date,
+): Promise<void> {
+  if (!configs?.length) {
+    return;
+  }
+
+  const existing = await tx
+    .select({ slug: siteBoards.slug })
+    .from(siteBoards)
+    .where(eq(siteBoards.siteId, siteId));
+  const have = new Set(existing.map((row) => row.slug));
+  const rows = configs.flatMap((config, index) =>
+    have.has(config.slug)
+      ? []
+      : [
+          {
+            siteId,
+            name: config.name,
+            slug: config.slug,
+            boardOrder: index,
+            createdAt: now,
+          },
+        ],
+  );
+
+  if (rows.length > 0) {
+    await tx.insert(siteBoards).values(rows);
   }
 }

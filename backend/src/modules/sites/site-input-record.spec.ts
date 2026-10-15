@@ -72,6 +72,7 @@ describe("toCreateSiteRecord", () => {
       optionalLinks: {
         naver_blog: "https://blog.naver.com/cafe",
       },
+      boardConfigs: null,
       logo: {
         url: "/uploads/logos/logo.png",
         originalName: "logo.png",
@@ -175,6 +176,7 @@ describe("toSiteInputForm", () => {
       youtubeLink: "https://youtube.com/@cafe",
       referenceLink: "https://example.com",
       extraRequest: "로고를 크게",
+      boardNames: [],
       logo: { url: "/uploads/logos/logo.png", originalName: "logo.png" },
       photos: [{ url: "/uploads/photos/a.png", originalName: "a.png" }],
     });

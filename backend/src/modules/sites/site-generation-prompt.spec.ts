@@ -159,6 +159,17 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.user).toContain('"companyName": "크레프 스튜디오"');
   });
 
+  it("게시판 이름과 목록 주소를 생성 요청에 넣고 글 내용은 만들지 않게 한다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      boardConfigs: [{ name: "뉴스", slug: "news" }],
+    });
+
+    expect(prompt.user).toContain("뉴스");
+    expect(prompt.user).toContain("/board/news");
+    expect(prompt.system).toContain("게시판 글 목록, 글 내용은 HTML로 만들지 않습니다");
+  });
+
   it("설계서가 있으면 고정 히어로 템플릿 대신 섹션 구성을 생성 요청에 넣는다", () => {
     const spec = fallbackSiteDesignSpec({
       ...completeInput,

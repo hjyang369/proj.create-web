@@ -21,7 +21,7 @@ import {
 } from "./interaction-rules.js";
 import {
   parseSiteGenerationResponse,
-  DANGEROUS_HTML,
+  sanitizeGeneratedHtml,
   unwrapJsonText,
   type GeneratedSitePage,
 } from "./site-generation-response.js";
@@ -534,11 +534,9 @@ Return a JSON object like: {"html":"...","css":"..."}
 
     const result = parsed as { html: string; css: string };
 
-    if (DANGEROUS_HTML.test(result.html)) {
-      throw new Error("AI 응답에 위험한 HTML이 포함되어 있습니다.");
-    }
-
-    result.html = keepAllowedActions(result.html);
+    const safe = sanitizeGeneratedHtml(result.html, result.css);
+    result.html = keepAllowedActions(safe.html);
+    result.css = safe.css;
 
     const sentTag = singleRootTag(sectionHtml);
     const receivedTag = singleRootTag(result.html);

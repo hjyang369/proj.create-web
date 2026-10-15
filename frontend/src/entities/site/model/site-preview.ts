@@ -94,6 +94,40 @@ export function previewPathForPages(
   return slug ? `/${slug}` : "/";
 }
 
+export type EditorPageChoice = {
+  id: string;
+  label: string;
+};
+
+/** 주소창 드롭다운. 일반 페이지 뒤에 게시판 주소를 붙인다. */
+export function editorPageChoices(
+  pages: { pageType: string; pageOrder: number }[],
+  boards: { slug: string }[],
+  posts: { slug: string; id: number }[] = [],
+): EditorPageChoice[] {
+  const boardChoices = boards.flatMap((board) => {
+    const details = posts
+      .filter((post) => post.slug === board.slug)
+      .sort((left, right) => right.id - left.id)
+      .map((post) => ({
+        id: `post:${board.slug}:${post.id}`,
+        label: `/board/${board.slug}/${post.id}`,
+      }));
+    return [
+      { id: `board:${board.slug}`, label: `/board/${board.slug}` },
+      ...details,
+    ];
+  });
+
+  return [
+    ...previewPageChoices(pages).map((page) => ({
+      id: `page:${page.pageOrder}`,
+      label: page.label,
+    })),
+    ...boardChoices,
+  ];
+}
+
 /** 주소창 드롭다운. 첫 페이지는 home page, 나머지는 /admin 같은 경로다. */
 export function previewPageChoices(
   pages: { pageType: string; pageOrder: number }[],
@@ -107,6 +141,12 @@ export function previewPageChoices(
         label: path === "/" ? "home page" : path,
       };
     });
+}
+
+/** 생성된 메뉴의 게시판 주소에서 슬러그만 꺼낸다. 다른 주소는 null. */
+export function boardSlugFromHref(href: string): string | null {
+  const match = href.match(/^\/board\/([a-z0-9-]+)\/?$/i);
+  return match?.[1] ?? null;
 }
 
 /** 직접 편집한 링크 값을 미리보기용으로 바꾼다. (사이트 안 .html 링크 → 앵커) */
@@ -190,11 +230,86 @@ const CLICK_DETECTOR_SCRIPT = [
   "var inner=sections[i].children;",
   "for(var j=0;j<inner.length;j++){inner[j].setAttribute('data-crep-inner',String(j));}",
   "}}",
+  "var savedMains={};",
+  "function boardRoot(pageOrder){",
+  "var found=document.querySelector('[data-crep-page=\"'+pageOrder+'\"]');",
+  "return found||document.body;",
+  "}",
+  "function boardMain(pageOrder){",
+  "var root=boardRoot(pageOrder);",
+  "var main=root.querySelector('main');",
+  "if(main) return main;",
+  "main=document.createElement('main');",
+  "var footer=root.querySelector('footer');",
+  "if(footer&&footer.parentNode===root) root.insertBefore(main,footer);",
+  "else root.appendChild(main);",
+  "return main;",
+  "}",
+  "function showBoard(pageOrder, html){",
+  "var order=typeof pageOrder==='number'&&isFinite(pageOrder)?pageOrder:0;",
+  "var main=boardMain(order);",
+  "var key=String(order);",
+  "if(savedMains[key]==null) savedMains[key]=main.innerHTML;",
+  "main.innerHTML=typeof html==='string'?html:'';",
+  "if(main.scrollIntoView) main.scrollIntoView({block:'start'});",
+  "}",
+  "function restoreBoards(){",
+  "for(var key in savedMains){",
+  "if(!Object.prototype.hasOwnProperty.call(savedMains,key)) continue;",
+  "boardMain(Number(key)).innerHTML=savedMains[key];",
+  "delete savedMains[key];",
+  "}}",
+  "function boardPageOrder(node){",
+  "var pageNode=node&&node.closest?node.closest('[data-crep-page]'):null;",
+  "if(!pageNode) return 0;",
+  "var value=parseInt(pageNode.getAttribute('data-crep-page'),10);",
+  "return isNaN(value)?0:value;",
+  "}",
+  "function boardTarget(href){",
+  "var match=String(href||'').match(/^\\/board\\/([a-z0-9-]+)(?:\\/([a-z0-9-]+))?\\/?$/i);",
+  "if(!match) return null;",
+  "var extra=match[2]||'';",
+  "if(extra==='') return {slug:match[1],view:'list',postId:0};",
+  "if(extra.toLowerCase()==='new') return {slug:match[1],view:'write',postId:0};",
+  "if(/^\\d+$/.test(extra)) return {slug:match[1],view:'detail',postId:parseInt(extra,10)};",
+  "return null;",
+  "}",
+  "function openCrepWrite(slug, postId){",
+  "if(typeof crepWriteBase!=='string'||!crepWriteBase)return false;",
+  "if(!/^[a-z0-9-]+$/i.test(slug))return false;",
+  "var url=crepWriteBase+encodeURIComponent(String(slug).toLowerCase());",
+  "var id=parseInt(postId,10)||0;",
+  "if(id>0) url+='&postId='+id;",
+  "window.open(url,'_blank');",
+  "return true;",
+  "}",
   "document.addEventListener('click',function(e){",
-  "if(!editing)return;",
   "var el=e.target;",
-  // 텍스트 노드 등이면 부모 엘리먼트로
   "if(!el||!el.tagName) el=el.parentElement;",
+  "var link=el&&el.closest?el.closest('a'):null;",
+  "if(link){",
+  "var target=boardTarget(link.getAttribute('href')||'');",
+  "if(target){",
+  "if(target.view==='write'&&openCrepWrite(target.slug)){e.preventDefault();e.stopPropagation();return;}",
+  "window.parent.postMessage({type:'crep-board',slug:target.slug,view:target.view,postId:target.postId,page:1,pageOrder:boardPageOrder(link),label:(link.textContent||'').replace(/\\s+/g,' ').trim().slice(0,100)},'*');",
+  "e.preventDefault();",
+  "e.stopPropagation();",
+  "return;}",
+  "if(!(link.closest&&link.closest('.crep-board'))) restoreBoards();",
+  "}",
+  "var control=el&&el.closest?el.closest('[data-crep-board]'):null;",
+  "if(control){",
+  "var view=control.getAttribute('data-crep-board')||'list';",
+  "if(view==='write'&&openCrepWrite(control.getAttribute('data-slug')||'',0)){e.preventDefault();e.stopPropagation();return;}",
+  "if(view==='manage'&&openCrepWrite(control.getAttribute('data-slug')||'',control.getAttribute('data-post')||'')){e.preventDefault();e.stopPropagation();return;}",
+  "if(view==='delete'&&!window.confirm('이 글을 삭제할까요?')){",
+  "e.preventDefault();e.stopPropagation();return;}",
+  "window.parent.postMessage({type:'crep-board',slug:control.getAttribute('data-slug')||'',view:view,postId:parseInt(control.getAttribute('data-post')||'0',10)||0,page:parseInt(control.getAttribute('data-page')||'1',10)||1,pageOrder:boardPageOrder(control)},'*');",
+  "e.preventDefault();e.stopPropagation();return;}",
+  "if(el&&el.closest&&el.closest('.crep-board')){",
+  "if(!(el.closest&&el.closest('[data-crep-board-form]'))){e.preventDefault();e.stopPropagation();}",
+  "return;}",
+  "if(!editing)return;",
   "if(!el||el===document.body||el===document.documentElement) return;",
   // 이전 선택 해제
   "var prev=document.querySelectorAll('.crep-sel');",
@@ -348,10 +463,22 @@ const CLICK_DETECTOR_SCRIPT = [
   "pageTimer=setTimeout(function(){pageTimer=0;reportPage();},80);",
   "},true);",
   "reportPage();",
+  "document.addEventListener('submit',function(e){",
+  "var form=e.target;",
+  "if(!form||!form.getAttribute||form.getAttribute('data-crep-board-form')!=='save') return;",
+  "e.preventDefault();",
+  "e.stopPropagation();",
+  "var titleEl=form.querySelector('[name=\"title\"]');",
+  "var contentEl=form.querySelector('[name=\"content\"]');",
+  "window.parent.postMessage({type:'crep-board-save',slug:form.getAttribute('data-slug')||'',postId:parseInt(form.getAttribute('data-post')||'0',10)||0,title:titleEl?titleEl.value:'',content:contentEl?contentEl.value:'',pageOrder:boardPageOrder(form)},'*');",
+  "},true);",
   "window.addEventListener('message',function(event){",
   "if(event.source!==window.parent) return;",
   "var data=event.data;",
-  "if(!data||data.type!=='crep-show-page') return;",
+  "if(!data) return;",
+  "if(data.type==='crep-board-show'){showBoard(data.pageOrder,data.html);return;}",
+  "if(data.type==='crep-board-hide'){restoreBoards();return;}",
+  "if(data.type!=='crep-show-page') return;",
   "var id=String(data.pageOrder);",
   "var targets=document.querySelectorAll('[data-crep-s][data-crep-page]');",
   "for(var n=0;n<targets.length;n++){",
@@ -370,7 +497,7 @@ export type SitePreviewPageWithOrder = SitePreviewPage & { pageOrder: number };
 
 /**
  * 편집 모드용 미리보기 문서를 생성한다.
- * iframe sandbox="allow-scripts"가 필요하다.
+ * iframe sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"가 필요하다.
  * 각 섹션에 data-crep-s, data-crep-page 속성이 추가되어
  * 편집 모드에서 클릭 시 부모 창으로 postMessage를 보낸다.
  * 부모 창이 { type: "crep-set-mode", editing } 을 보내면
@@ -379,6 +506,7 @@ export type SitePreviewPageWithOrder = SitePreviewPage & { pageOrder: number };
 export function buildEditablePreviewDocument(
   pages: SitePreviewPage[],
   assetOrigin?: string,
+  boardWriteBase = "",
 ): string {
   const ordered = [...pages].sort((left, right) => left.pageOrder - right.pageOrder);
   const css = ordered
@@ -410,6 +538,7 @@ ${css}
 </head>
 <body>
 ${html}
+<script>var crepWriteBase=${JSON.stringify(boardWriteBase)};</script>
 ${CLICK_DETECTOR_SCRIPT}
 ${SITE_INTERACTION_SCRIPT}
 </body>

@@ -3,6 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/features/auth";
 import {
+  boardDetailHtml,
+  boardListHtml,
+  boardPageSources,
+  boardPostPageSources,
+  BOARD_CREATED_CHANNEL,
+  boardStatusHtml,
+  boardWriteBase,
+  boardWriteHtml,
+  boardWritePath,
+  boardsForEditor,
+  createBoardPost,
+  deleteBoardPost,
+  ensureSiteBoard,
+  getBoardPost,
+  listBoardPosts,
+  listSiteBoards,
+  readBoardCreatedMessage,
+  updateBoardPost,
+} from "@/entities/board";
+import {
   addSiteChatEntry,
   buildEditablePreviewDocument,
   diffElementEdit,
@@ -25,7 +45,7 @@ import {
   readEditableFromHtml,
   regenerateSiteDraft,
   saveSiteDraft,
-  previewPageChoices,
+  editorPageChoices,
   previewPathForPages,
   toPreviewAssetUrl,
   toPreviewHref,
@@ -166,6 +186,9 @@ function previewMessage(preview: PreviewState): string {
 
 export function EditSiteScreen({ siteId }: { siteId: string }) {
   const chrome = describeEditPageChrome();
+  const boardTicket = useRef(0);
+  const boardPageOrderRef = useRef(0);
+  const previewBoardPathRef = useRef<string | null>(null);
   const { ready, user } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ kind: "loading" });
@@ -203,6 +226,20 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   const [previewDoc, setPreviewDoc] = useState<string | null>(null);
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [previewPageOrder, setPreviewPageOrder] = useState<number | null>(null);
+  const [previewBoardPath, setPreviewBoardPath] = useState<string | null>(null);
+  const [savedBoards, setSavedBoards] = useState<
+    { id: number; name: string; slug: string }[]
+  >([]);
+  const [boardPosts, setBoardPosts] = useState<
+    {
+      id: number;
+      slug: string;
+      title: string;
+      content: string;
+      createdAt: string;
+    }[]
+  >([]);
+  const postsEpoch = useRef(0);
   const [manualTarget, setManualTargetState] = useState<ManualTarget | null>(
     null,
   );
@@ -346,12 +383,17 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   }
 
   /** iframe을 새 사이트 내용으로 다시 그린다. (AI 수정, 재생성, 수정 내역 이동, 저장 버전 열기) */
-  function showSite(site: SiteEditorDetail) {
-    setPreviewDoc(
-      site.pages.length > 0
-        ? buildEditablePreviewDocument(site.pages, API_URL)
-        : null,
+  function previewDocument(pages: SiteEditorDetail["pages"]) {
+    const origin = typeof window === "undefined" ? "" : window.location.origin;
+    return buildEditablePreviewDocument(
+      pages,
+      API_URL,
+      origin ? boardWriteBase(origin, siteId) : "",
     );
+  }
+
+  function showSite(site: SiteEditorDetail) {
+    setPreviewDoc(site.pages.length > 0 ? previewDocument(site.pages) : null);
     setManualTarget(null);
     setPreview({ kind: "ready", site });
   }
@@ -432,9 +474,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         setHistoryIndex(0);
         setSavedKey(snapshotKey(site));
         setPreviewDoc(
-          site.pages.length > 0
-            ? buildEditablePreviewDocument(site.pages, API_URL)
-            : null,
+          site.pages.length > 0 ? previewDocument(site.pages) : null,
         );
         manualTargetRef.current = null;
         setManualTargetState(null);
@@ -464,6 +504,226 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     };
   }, [ready, user, siteId]);
 
+  function postBoardHtml(pageOrder: number, html: string) {
+    previewFrameRef.current?.contentWindow?.postMessage(
+      { type: "crep-board-show", pageOrder, html },
+      "*",
+    );
+  }
+
+  /** 미리보기 사이트의 본문만 게시판으로 바꾼다. 헤더와 메뉴는 그대로 둔다. */
+  async function openSiteBoard(data: object) {
+    const record = data as Record<string, unknown>;
+    const slug = typeof record.slug === "string" ? record.slug : "";
+    const siteNumber = Number(siteId);
+    if (
+      !/^[a-z0-9-]+$/i.test(slug) ||
+      !Number.isInteger(siteNumber) ||
+      siteNumber <= 0
+    ) {
+      return;
+    }
+
+    const pageOrder =
+      typeof record.pageOrder === "number" && Number.isInteger(record.pageOrder)
+        ? record.pageOrder
+        : boardPageOrderRef.current;
+    boardPageOrderRef.current = pageOrder;
+    const postId =
+      typeof record.postId === "number" &&
+      Number.isInteger(record.postId) &&
+      record.postId > 0
+        ? record.postId
+        : 0;
+    const page =
+      typeof record.page === "number" && record.page >= 1
+        ? Math.floor(record.page)
+        : 1;
+    const view = typeof record.view === "string" ? record.view : "list";
+    const title = typeof record.title === "string" ? record.title : "";
+    const content = typeof record.content === "string" ? record.content : "";
+    const label =
+      typeof record.label === "string" ? record.label.trim().slice(0, 100) : "";
+    const ticket = ++boardTicket.current;
+
+    try {
+      const boards = await listSiteBoards(siteNumber);
+      if (ticket !== boardTicket.current) return;
+      let board = boards.find(
+        (item) => item.slug.toLowerCase() === slug.toLowerCase(),
+      );
+      if (!board && user) {
+        try {
+          board = await ensureSiteBoard(siteNumber, {
+            slug: slug.toLowerCase(),
+            name: label || slug,
+          });
+          if (board) {
+            const added = board;
+            setSavedBoards((prev) =>
+              prev.some((item) => item.slug === added.slug)
+                ? prev
+                : [...prev, added],
+            );
+          }
+        } catch {
+          board = undefined;
+        }
+      }
+      if (!board || ticket !== boardTicket.current) {
+        if (ticket === boardTicket.current) {
+          postBoardHtml(pageOrder, boardStatusHtml("게시판을 찾을 수 없습니다."));
+        }
+        return;
+      }
+
+      const boardPath = `/board/${slug.toLowerCase()}`;
+      setPreviewBoardPath(boardPath);
+
+      const canWrite = user
+        ? await getMySite(siteNumber).then(
+            () => true,
+            () => false,
+          )
+        : false;
+      if (ticket !== boardTicket.current) return;
+
+      async function showList(nextPage: number) {
+        const posts = await listBoardPosts(board!.id, nextPage);
+        if (ticket !== boardTicket.current) return;
+        postBoardHtml(
+          pageOrder,
+          boardListHtml({
+            name: board!.name,
+            slug: board!.slug,
+            posts,
+            page: nextPage,
+            canWrite,
+          }),
+        );
+      }
+
+      if (record.type === "crep-board-save") {
+        if (!canWrite) {
+          await showList(1);
+          return;
+        }
+        if (title.trim() === "" || content.trim() === "") {
+          postBoardHtml(
+            pageOrder,
+            boardWriteHtml({
+              name: board.name,
+              slug: board.slug,
+              postId,
+              title,
+              content,
+              error: "제목과 내용을 입력해 주세요.",
+            }),
+          );
+          return;
+        }
+        const input = { title: title.trim(), content: content.trim() };
+        const saved =
+          postId > 0
+            ? await updateBoardPost(board.id, postId, input)
+            : await createBoardPost(board.id, input);
+        if (ticket !== boardTicket.current) return;
+        postsEpoch.current += 1;
+        setBoardPosts((prev) => [
+          {
+            id: saved.id,
+            slug: board.slug,
+            title: saved.title,
+            content: saved.content,
+            createdAt: saved.createdAt,
+          },
+          ...prev.filter(
+            (item) => !(item.slug === board.slug && item.id === saved.id),
+          ),
+        ]);
+        setPreviewBoardPath(`/board/${board.slug}/${saved.id}`);
+        postBoardHtml(
+          pageOrder,
+          boardDetailHtml({
+            name: board.name,
+            slug: board.slug,
+            canWrite: true,
+            post: saved,
+          }),
+        );
+        return;
+      }
+
+      if (view === "delete") {
+        if (canWrite && postId > 0) {
+          await deleteBoardPost(board.id, postId);
+          postsEpoch.current += 1;
+          setBoardPosts((prev) =>
+            prev.filter(
+              (item) => !(item.slug === board.slug && item.id === postId),
+            ),
+          );
+        }
+        setPreviewBoardPath(boardPath);
+        await showList(1);
+        return;
+      }
+
+      if (view === "write") {
+        await showList(1);
+        return;
+      }
+
+      if (view === "edit") {
+        if (!canWrite || postId <= 0) {
+          await showList(1);
+          return;
+        }
+        const post = await getBoardPost(board.id, postId);
+        if (ticket !== boardTicket.current) return;
+        postBoardHtml(
+          pageOrder,
+          boardWriteHtml({
+            name: board.name,
+            slug: board.slug,
+            postId: post.id,
+            title: post.title,
+            content: post.content,
+          }),
+        );
+        return;
+      }
+
+      if (view === "detail" && postId > 0) {
+        const post = await getBoardPost(board.id, postId);
+        if (ticket !== boardTicket.current) return;
+        setPreviewBoardPath(`/board/${board.slug}/${post.id}`);
+        postBoardHtml(
+          pageOrder,
+          boardDetailHtml({
+            name: board.name,
+            slug: board.slug,
+            canWrite,
+            post,
+          }),
+        );
+        return;
+      }
+
+      await showList(page);
+    } catch (error: unknown) {
+      if (ticket !== boardTicket.current) return;
+      postBoardHtml(
+        pageOrder,
+        boardStatusHtml(
+          error instanceof Error
+            ? error.message
+            : "게시판을 불러오지 못했습니다.",
+        ),
+      );
+    }
+  }
+
   // iframe 안 클릭(AI 수정)·우클릭(직접 편집) 메시지를 받는다.
   // 최신 상태를 쓰기 위해 처리 함수는 ref로 넘긴다.
   function handleFrameMessage(data: unknown) {
@@ -472,6 +732,33 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     }
 
     const message = data as { type?: unknown; pageOrder?: unknown };
+
+    if (message.type === "crep-board") {
+      const record = data as Record<string, unknown>;
+      const boardView = typeof record.view === "string" ? record.view : "";
+      const slug = typeof record.slug === "string" ? record.slug : "";
+      if (
+        (boardView === "write" || boardView === "manage") &&
+        /^[a-z0-9-]+$/i.test(slug)
+      ) {
+        const rawPostId =
+          typeof record.postId === "number" ? record.postId : 0;
+        window.open(
+          boardWritePath(
+            siteId,
+            slug,
+            boardView === "manage" ? rawPostId : undefined,
+          ),
+          "_blank",
+        );
+        return;
+      }
+    }
+
+    if (message.type === "crep-board" || message.type === "crep-board-save") {
+      void openSiteBoard(data);
+      return;
+    }
 
     if (message.type === "crep-page") {
       if (
@@ -640,7 +927,83 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
 
   useEffect(() => {
     frameMessageRef.current = handleFrameMessage;
+    previewBoardPathRef.current = previewBoardPath;
   });
+
+  useEffect(() => {
+    const channel = new BroadcastChannel(BOARD_CREATED_CHANNEL);
+    channel.onmessage = (event) => {
+      const created = readBoardCreatedMessage(event.data);
+      if (!created || String(created.siteId) !== siteId) return;
+      const path = previewBoardPathRef.current;
+      const listPath = `/board/${created.slug}`;
+      const detailPath =
+        created.postId == null ? null : `${listPath}/${created.postId}`;
+      if (path !== listPath && path !== detailPath) return;
+      frameMessageRef.current({
+        type: "crep-board",
+        slug: created.slug,
+        view: created.removed || path === listPath ? "list" : "detail",
+        postId: created.postId ?? 0,
+        page: 1,
+        pageOrder: boardPageOrderRef.current,
+      });
+    };
+    return () => channel.close();
+  }, [siteId]);
+
+  useEffect(() => {
+    const id = Number(siteId);
+    if (!Number.isInteger(id) || id <= 0) return;
+    let cancelled = false;
+    const epoch = postsEpoch.current;
+    listSiteBoards(id).then(
+      async (boards) => {
+        if (cancelled) return;
+        setSavedBoards(boards);
+        const groups = await Promise.all(
+          boards.map(async (board) => {
+            try {
+              const items: {
+                id: number;
+                title: string;
+                createdAt: string;
+              }[] = [];
+              for (let page = 1; page <= 10; page += 1) {
+                const chunk = await listBoardPosts(board.id, page);
+                items.push(...chunk);
+                if (chunk.length < 20) break;
+              }
+              const details = await Promise.all(
+                items.map((item) => getBoardPost(board.id, item.id)),
+              );
+              return details.map((post) => ({
+                id: post.id,
+                slug: board.slug,
+                title: post.title,
+                content: post.content,
+                createdAt: post.createdAt,
+              }));
+            } catch {
+              return [];
+            }
+          }),
+        );
+        if (!cancelled && epoch === postsEpoch.current) {
+          setBoardPosts(groups.flat());
+        }
+      },
+      () => {
+        if (!cancelled && epoch === postsEpoch.current) {
+          setSavedBoards([]);
+          setBoardPosts([]);
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId, currentSite]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -1118,6 +1481,75 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     }
   }
 
+  const editorBoards = boardsForEditor({
+    pages: currentSite?.pages ?? [],
+    names: currentSite?.inputs?.boardNames ?? [],
+    saved: savedBoards,
+  });
+  const codePages = [
+    ...(preview.kind === "ready" ? preview.site.pages : []),
+    ...boardPageSources(
+      preview.kind === "ready" ? preview.site.pages : [],
+      editorBoards,
+      boardPosts,
+    ).map((board, index) => ({
+      pageOrder: 1000 + index,
+      pageType: board.slug,
+      folder: "boards",
+      fileLabel: board.name,
+      html: board.html,
+      css: board.css,
+    })),
+    ...boardPostPageSources(
+      preview.kind === "ready" ? preview.site.pages : [],
+      editorBoards,
+      boardPosts,
+    ).map((post) => ({
+      pageOrder: 2000 + post.id,
+      pageType: `${post.slug}-${post.id}`,
+      folder: "boards",
+      fileLabel: `${post.slug}-${post.id}`,
+      html: post.html,
+      css: post.css,
+    })),
+  ];
+
+  function selectEditorPage(pageId: string) {
+    const postMatch = /^post:([a-z0-9-]+):(\d+)$/i.exec(pageId);
+    if (postMatch) {
+      const slug = postMatch[1].toLowerCase();
+      const board = editorBoards.find((item) => item.slug === slug);
+      void openSiteBoard({
+        type: "crep-board",
+        slug,
+        view: "detail",
+        postId: Number(postMatch[2]),
+        pageOrder: currentSite?.pages[0]?.pageOrder ?? 1,
+        label: board?.name ?? slug,
+      });
+      return;
+    }
+    if (pageId.startsWith("board:")) {
+      const slug = pageId.slice("board:".length);
+      const board = editorBoards.find((item) => item.slug === slug);
+      void openSiteBoard({
+        type: "crep-board",
+        slug,
+        view: "list",
+        page: 1,
+        pageOrder: currentSite?.pages[0]?.pageOrder ?? 1,
+        label: board?.name ?? slug,
+      });
+      return;
+    }
+    if (!pageId.startsWith("page:")) return;
+    const pageOrder = Number(pageId.slice("page:".length));
+    if (!Number.isInteger(pageOrder)) return;
+    setPreviewBoardPath(null);
+    postFrame({ type: "crep-board-hide" });
+    showPreviewPage(pageOrder);
+  }
+
   return (
     <div className="relative flex h-dvh min-h-0 flex-col bg-white lg:flex-row">
       <EditSiteChatPanel
@@ -1155,12 +1587,16 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <EditSitePreviewBar
           chrome={chrome}
-          pagePath={previewPathForPages(
+          pagePath={
+            previewBoardPath ??
+            previewPathForPages(currentSite?.pages ?? [], previewPageOrder)
+          }
+          pages={editorPageChoices(
             currentSite?.pages ?? [],
-            previewPageOrder,
+            editorBoards,
+            boardPosts,
           )}
-          pages={previewPageChoices(currentSite?.pages ?? [])}
-          onSelectPage={showPreviewPage}
+          onSelectPage={selectEditorPage}
           viewport={viewport}
           onChangeViewport={setViewport}
           view={view}
@@ -1207,7 +1643,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
                 key={previewReloadKey}
                 ref={previewFrameRef}
                 title={`${preview.site.name} 미리보기`}
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
                 srcDoc={previewDoc}
                 className={
                   view === "code" ? "hidden" : "h-full w-full border-0 bg-white"
@@ -1215,7 +1651,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
                 onLoad={() => postPreviewMode(editingRef.current)}
               />
               {view === "code" ? (
-                <EditSiteCodeView pages={preview.site.pages} />
+                <EditSiteCodeView pages={codePages} />
               ) : null}
             </div>
           ) : (

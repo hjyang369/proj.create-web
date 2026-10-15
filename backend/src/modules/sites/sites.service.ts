@@ -6,6 +6,12 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
+import {
+  BoardNameError,
+  boardConfigsFromNames,
+} from "../boards/board-names.js";
+import { insertBoardNav } from "../boards/insert-board-nav.js";
+import type { BoardConfig } from "../boards/board-slug.js";
 import { randomUUID } from "crypto";
 import { extname, join } from "path";
 import { mkdir, writeFile } from "fs/promises";
@@ -98,6 +104,8 @@ function toInputFields(dto: CreateSiteDto): SiteInputUpdate {
   if (dto.instagramLink) optionalLinks.instagram = dto.instagramLink;
   if (dto.youtubeLink) optionalLinks.youtube = dto.youtubeLink;
 
+  const boardConfigs = boardConfigsFor(dto);
+
   return {
     name: dto.name,
     businessType: dto.industry || null,
@@ -113,10 +121,50 @@ function toInputFields(dto: CreateSiteDto): SiteInputUpdate {
     extraRequest: dto.extraRequest || null,
     pageCount: dto.pageCount,
     pageComponents: dto.selectedPages.length > 0 ? dto.selectedPages : null,
+    ...(boardConfigs ? { boardConfigs } : {}),
     referenceUrl: dto.referenceLink || null,
     optionalLinks:
       Object.keys(optionalLinks).length > 0 ? optionalLinks : null,
   };
+}
+
+function boardConfigsFor(dto: CreateSiteDto): BoardConfig[] | undefined {
+  let configs: BoardConfig[];
+  try {
+    configs = boardConfigsFromNames(dto.boardNames ?? []);
+  } catch (error) {
+    if (error instanceof BoardNameError) {
+      throw new BadRequestException(error.message);
+    }
+    throw error;
+  }
+
+  if (!dto.selectedPages.includes("board") || configs.length === 0) {
+    return undefined;
+  }
+  return configs;
+}
+
+function assertNamedBoards(dto: CreateSiteDto): void {
+  if (!dto.selectedPages.includes("board")) {
+    return;
+  }
+  if (!boardConfigsFor(dto)?.length) {
+    throw new BadRequestException("게시판 이름을 입력해 주세요.");
+  }
+}
+
+function withBoardNav<T extends { html: string }>(
+  pages: T[],
+  configs: BoardConfig[] | null | undefined,
+): T[] {
+  if (!configs?.length) {
+    return pages;
+  }
+  return pages.map((page) => ({
+    ...page,
+    html: insertBoardNav(page.html, configs),
+  }));
 }
 
 function toListItem(site: StoredSite): SiteListItem {
@@ -282,6 +330,8 @@ export class SitesService {
       throw new UnauthorizedException("로그인이 필요합니다.");
     }
 
+    assertNamedBoards(dto);
+
     // ── 이미지 파일 디스크 저장 (순차 처리 — I/O 집중 방지)
     const logoResult = logoFile ? await saveFile(logoFile, "logos") : null;
 
@@ -300,7 +350,10 @@ export class SitesService {
     const created = await this.sites.create(record);
 
     try {
-      const pages = await this.generator.generatePages(record);
+      const pages = withBoardNav(
+        await this.generator.generatePages(record),
+        record.boardConfigs,
+      );
       await this.sites.saveGeneratedPages(created.id, pages);
     } catch (error) {
       const message =
@@ -332,6 +385,8 @@ export class SitesService {
       throw new NotFoundException("사이트를 찾을 수 없습니다.");
     }
 
+    assertNamedBoards(dto);
+
     const current = await this.sites.findOwnedGenerationInput(userId, siteId);
     if (!current || current.userId !== userId) {
       throw new NotFoundException("사이트를 찾을 수 없습니다.");
@@ -360,7 +415,10 @@ export class SitesService {
 
     let pages;
     try {
-      pages = await this.generator.generatePages(record);
+      pages = withBoardNav(
+        await this.generator.generatePages(record),
+        record.boardConfigs,
+      );
     } catch (error) {
       const message =
         error instanceof Error
@@ -493,6 +551,7 @@ export class SitesService {
       youtubeLink: draft.inputs.youtubeLink,
       referenceLink: draft.inputs.referenceLink,
       extraRequest: draft.inputs.extraRequest,
+      boardNames: draft.inputs.boardNames ?? [],
     });
     const nextImages = {
       logo: draft.inputs.logo,

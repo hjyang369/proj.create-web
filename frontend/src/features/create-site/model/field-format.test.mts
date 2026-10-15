@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  describeBoardNamesIssue,
   describeFieldFormat,
   describeSafeExternalLink,
   describeSafeReferenceLink,
@@ -275,5 +276,29 @@ describe("describeSafeReferenceLink", () => {
     assert.equal(describeSafeReferenceLink("https://127.0.0.1"), null);
     assert.equal(describeSafeReferenceLink("https://metadata.google.internal"), null);
     assert.equal(describeSafeReferenceLink("https://printer.local"), null);
+  });
+});
+
+describe("describeBoardNamesIssue", () => {
+  it("게시판을 고르지 않았으면 이름을 검사하지 않는다", () => {
+    assert.equal(describeBoardNamesIssue(["about"], []), null);
+  });
+
+  it("게시판 이름이 비어 있으면 안내한다", () => {
+    assert.equal(
+      describeBoardNamesIssue(["board"], ["  "]),
+      "게시판 이름을 입력해 주세요.",
+    );
+  });
+
+  it("같은 이름은 거절한다", () => {
+    assert.equal(
+      describeBoardNamesIssue(["board"], ["뉴스", " 뉴스 "]),
+      "게시판 이름이 중복됩니다.",
+    );
+  });
+
+  it("이름이 있으면 통과한다", () => {
+    assert.equal(describeBoardNamesIssue(["board"], ["뉴스", "소식"]), null);
   });
 });

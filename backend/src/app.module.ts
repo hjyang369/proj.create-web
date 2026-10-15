@@ -4,6 +4,7 @@ import { AppController } from "./app.controller.js";
 import { AppService } from "./app.service.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
+import { BoardsModule } from "./modules/boards/boards.module.js";
 import { SitesModule } from "./modules/sites/sites.module.js";
 
 @Module({
@@ -14,6 +15,7 @@ import { SitesModule } from "./modules/sites/sites.module.js";
     DatabaseModule,
     AuthModule,
     SitesModule,
+    BoardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

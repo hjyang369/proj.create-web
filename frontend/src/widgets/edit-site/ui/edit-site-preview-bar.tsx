@@ -10,8 +10,8 @@ export type PreviewViewport = "desktop" | "mobile";
 type EditSitePreviewBarProps = {
   chrome: EditPageChrome;
   pagePath: string;
-  pages: { pageOrder: number; label: string }[];
-  onSelectPage: (pageOrder: number) => void;
+  pages: { id: string; label: string }[];
+  onSelectPage: (pageId: string) => void;
   viewport: PreviewViewport;
   onChangeViewport: (viewport: PreviewViewport) => void;
   view: SiteViewMode;
@@ -415,10 +415,10 @@ function PagePathField({
   onSelectPage,
 }: {
   pagePath: string;
-  pages: { pageOrder: number; label: string }[];
+  pages: { id: string; label: string }[];
   canRefresh: boolean;
   onRefresh: () => void;
-  onSelectPage: (pageOrder: number) => void;
+  onSelectPage: (pageId: string) => void;
 }) {
   const fieldRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
@@ -517,7 +517,7 @@ function PagePathField({
               }}
             >
               {pages.map((page) => (
-                <li key={page.pageOrder}>
+                <li key={page.id}>
                   <button
                     type="button"
                     role="option"
@@ -527,7 +527,7 @@ function PagePathField({
                       hover:bg-gray-100
                       ${page.label === label ? "bg-gray-100" : ""}`}
                     onClick={() => {
-                      onSelectPage(page.pageOrder);
+                      onSelectPage(page.id);
                       setOpen(false);
                     }}
                   >

@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -194,6 +195,91 @@ describe('SitesService.create', () => {
       id: 9,
     });
     expect(savedPages).toEqual({ siteId: 9, pages: [generatedPage] });
+  });
+
+  it('게시판 이름을 저장하고 생성된 메뉴에 링크를 넣는다', async () => {
+    let saved: CreateSiteRecord | undefined;
+    let savedPages: { siteId: number; pages: GeneratedSitePage[] } | undefined;
+    const service = new SitesService(
+      {
+        async listByUserId() {
+          return [];
+        },
+        async create(data) {
+          saved = data;
+          return { id: 9 };
+        },
+        async saveGeneratedPages(siteId, pages) {
+          savedPages = { siteId, pages };
+        },
+        async findOwnedWithPages() {
+          return null;
+        },
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {},
+      },
+      {
+        async generatePages() {
+          return [
+            {
+              ...generatedPage,
+              html: '<nav><a href="#home">홈</a></nav><main><h1>카페</h1></main>',
+            },
+          ];
+        },
+      },
+    );
+
+    await service.create(
+      1,
+      { ...createDto, selectedPages: ['board'], boardNames: ['뉴스'] },
+      undefined,
+      [],
+    );
+
+    expect(saved?.boardConfigs).toEqual([{ name: '뉴스', slug: 'news' }]);
+    expect(savedPages?.pages[0]?.html).toContain('href="/board/news"');
+    expect(savedPages?.pages[0]?.html).toContain('뉴스');
+  });
+
+  it('게시판을 골랐는데 이름이 없으면 사이트를 만들지 않는다', async () => {
+    let created = false;
+    const service = new SitesService(
+      {
+        async listByUserId() {
+          return [];
+        },
+        async create() {
+          created = true;
+          return { id: 9 };
+        },
+        async saveGeneratedPages() {},
+        async findOwnedWithPages() {
+          return null;
+        },
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {},
+      },
+      {
+        async generatePages() {
+          return [generatedPage];
+        },
+      },
+    );
+
+    await expect(
+      service.create(
+        1,
+        { ...createDto, selectedPages: ['board'], boardNames: ['  '] },
+        undefined,
+        [],
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(created).toBe(false);
   });
 
   it('AI 생성에 실패하면 페이지를 저장하지 않고 안내한다', async () => {
@@ -571,6 +657,7 @@ describe('SitesService.updateInputs', () => {
       youtubeLink: '',
       referenceLink: '',
       extraRequest: '로고를 크게',
+      boardNames: [],
       logo: null,
       photos: [],
     });

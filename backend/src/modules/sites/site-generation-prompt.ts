@@ -67,6 +67,12 @@ export function buildSiteGenerationPrompt(
     ...(input.pageComponents && {
       requestedPageComponents: input.pageComponents,
     }),
+    ...(input.boardConfigs?.length && {
+      boards: input.boardConfigs.map((board) => ({
+        name: board.name,
+        href: `/board/${board.slug}`,
+      })),
+    }),
     ...(input.referenceUrl && { referenceUrl: input.referenceUrl }),
     ...(input.optionalLinks && { optionalLinks: input.optionalLinks }),
     ...(input.logo && { logoUrl: input.logo.url }),
@@ -96,6 +102,18 @@ ${JSON.stringify(designPlan, null, 2)}
 `
     : "";
 
+  const boardNavRule = input.boardConfigs?.length
+    ? `
+[게시판]
+- nav에 아래 게시판 링크를 추가합니다.
+${input.boardConfigs
+  .map((board) => `- ${board.name}: /board/${board.slug}`)
+  .join("\n")}
+- 게시판 글 목록, 글 내용은 HTML로 만들지 않습니다. 링크만 넣으세요.
+- 게시판 링크만 /board/주소를 사용합니다. 그 외 메뉴는 href="#섹션id"만 사용하세요.
+`
+    : "";
+
   const system = `당신은 접근성, 반응형 설계, 시맨틱 HTML을 준수하는 전문 웹 디자이너이자 프론트엔드 개발자입니다.
 ${designInstructions}
 
@@ -115,6 +133,7 @@ ${designInstructions}
 
 ${INTERACTION_SYSTEM_RULES}
 - 모든 주요 section에는 사이트 전체에서 고유한 data-component-id와 의미 있는 data-component-type을 넣으세요.
+${boardNavRule}
 
 [메인 페이지 및 섹션 구성]
 - pageOrder 1은 메인 페이지입니다.

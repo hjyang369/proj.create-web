@@ -275,6 +275,7 @@ export type SiteInputFieldValues = {
   mood: string;
   pageCount: string;
   selectedPages: string[];
+  boardNames?: string[];
   blogLink: string;
   websiteLink: string;
   instagramLink: string;
@@ -380,6 +381,33 @@ export function describeSiteInputIssue(
   const reference = describeFieldFormat("referenceUrl", values.referenceLink);
   if (!reference.valid) {
     return reference.message;
+  }
+
+  return null;
+}
+
+/** 게시판을 골랐을 때만 이름을 검사한다. 문제가 없으면 null. */
+export function describeBoardNamesIssue(
+  selectedPages: string[],
+  names: string[],
+): string | null {
+  if (!selectedPages.includes("board")) {
+    return null;
+  }
+
+  if (names.length === 0 || names.length > 5 || names.some((name) => name.trim() === "")) {
+    return names.length > 5
+      ? "게시판은 5개까지 만들 수 있습니다."
+      : "게시판 이름을 입력해 주세요.";
+  }
+
+  const seen = new Set<string>();
+  for (const name of names) {
+    const trimmed = name.trim();
+    if (seen.has(trimmed)) {
+      return "게시판 이름이 중복됩니다.";
+    }
+    seen.add(trimmed);
   }
 
   return null;

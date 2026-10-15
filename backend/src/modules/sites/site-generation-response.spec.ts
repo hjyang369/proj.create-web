@@ -61,20 +61,56 @@ describe("parseSiteGenerationResponse", () => {
     expect(pages[0]?.html).toBe(html);
   });
 
-  it("위험한 HTML이 있으면 거절한다", () => {
-    expect(() =>
-      parseSiteGenerationResponse(
-        JSON.stringify({
-          pages: [
-            {
-              ...validPage,
-              html: '<main><script>alert(1)</script></main>',
-            },
-          ],
-        }),
-        1,
-      ),
-    ).toThrow("위험한");
+  it("script는 지우고 나머지 페이지는 살린다", () => {
+    const pages = parseSiteGenerationResponse(
+      JSON.stringify({
+        pages: [
+          {
+            ...validPage,
+            html: '<main><h1>카페</h1><script>alert(1)</script></main>',
+          },
+        ],
+      }),
+      1,
+    );
+
+    expect(pages[0]?.html).toContain("<h1>카페</h1>");
+    expect(pages[0]?.html).not.toContain("script");
+    expect(pages[0]?.html).not.toContain("alert");
+  });
+
+  it("head의 style은 css로 옮기고 페이지는 거절하지 않는다", () => {
+    const pages = parseSiteGenerationResponse(
+      JSON.stringify({
+        pages: [
+          {
+            ...validPage,
+            html: '<!doctype html><html><head><style>h1{color:red}</style></head><body><main><h1>카페</h1></main></body></html>',
+            css: "main{margin:0}",
+          },
+        ],
+      }),
+      1,
+    );
+
+    expect(pages[0]?.html).not.toContain("<style");
+    expect(pages[0]?.html).toContain("<h1>카페</h1>");
+    expect(pages[0]?.css).toContain("h1{color:red}");
+    expect(pages[0]?.css).toContain("main{margin:0}");
+  });
+
+  it("주소의 only= 는 위험한 코드로 보지 않는다", () => {
+    const html =
+      '<main><img src="https://images.example.com/photo.jpg?only=1" alt="사진"></main>';
+
+    const pages = parseSiteGenerationResponse(
+      JSON.stringify({
+        pages: [{ ...validPage, html }],
+      }),
+      1,
+    );
+
+    expect(pages[0]?.html).toContain("only=1");
   });
 
   it("허용된 data-action은 남기고 목록 밖 값은 지운다", () => {
@@ -96,20 +132,22 @@ describe("parseSiteGenerationResponse", () => {
     expect(pages[0]?.html).toContain("나쁜 버튼");
   });
 
-  it("인라인 이벤트 속성은 거절한다", () => {
-    expect(() =>
-      parseSiteGenerationResponse(
-        JSON.stringify({
-          pages: [
-            {
-              ...validPage,
-              html: '<main><img src="photo.jpg" onerror="alert(1)"></main>',
-            },
-          ],
-        }),
-        1,
-      ),
-    ).toThrow("위험한");
+  it("인라인 이벤트 속성은 지운다", () => {
+    const pages = parseSiteGenerationResponse(
+      JSON.stringify({
+        pages: [
+          {
+            ...validPage,
+            html: '<main><img src="photo.jpg" onerror="alert(1)" alt="사진"></main>',
+          },
+        ],
+      }),
+      1,
+    );
+
+    expect(pages[0]?.html).toContain('src="photo.jpg"');
+    expect(pages[0]?.html).not.toContain("onerror");
+    expect(pages[0]?.html).not.toContain("alert");
   });
 
   it("JSON이 아니면 거절한다", () => {

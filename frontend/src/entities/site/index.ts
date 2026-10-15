@@ -32,8 +32,10 @@ export type {
 export { listMySites } from "./api/list-my-sites";
 export type { SiteListItem } from "./model/site";
 export {
+  boardSlugFromHref,
   buildSitePreviewDocument,
   buildEditablePreviewDocument,
+  editorPageChoices,
   previewPageChoices,
   previewPathForPages,
   toPreviewAssetUrl,
