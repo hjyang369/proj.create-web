@@ -205,10 +205,10 @@ function inputValues(
     mood: "warm",
     pageCount: "1",
     selectedPages: [],
-    blogLink: "",
-    websiteLink: "",
-    instagramLink: "",
-    youtubeLink: "",
+    blogLink: [],
+    websiteLink: [],
+    instagramLink: [],
+    youtubeLink: [],
     referenceLink: "",
     extraRequest: "",
     ...overrides,
@@ -243,6 +243,44 @@ describe("describeSiteInputIssue", () => {
     assert.equal(
       describeSiteInputIssue(inputValues({ pageCount: "0" }), allowed),
       "페이지 수는 1 이상의 숫자로 입력해 주세요.",
+    );
+  });
+
+  it("같은 종류 링크를 여러 개 넣어도 형식이 맞으면 저장할 수 있다", () => {
+    assert.equal(
+      describeSiteInputIssue(
+        inputValues({
+          blogLink: [
+            "https://blog.naver.com/one",
+            "https://blog.naver.com/two",
+          ],
+          websiteLink: ["https://one.example", "https://two.example"],
+        }),
+        allowed,
+      ),
+      null,
+    );
+  });
+
+  it("링크가 6개이거나 주소가 아니면 안내한다", () => {
+    assert.equal(
+      describeSiteInputIssue(
+        inputValues({
+          blogLink: Array.from(
+            { length: 6 },
+            (_, index) => `https://blog.example/${index}`,
+          ),
+        }),
+        allowed,
+      ),
+      "블로그는 5개까지 넣을 수 있습니다.",
+    );
+    assert.equal(
+      describeSiteInputIssue(
+        inputValues({ instagramLink: ["javascript:alert(1)"] }),
+        allowed,
+      ),
+      "인스타그램: http 또는 https 주소만 사용할 수 있습니다.",
     );
   });
 });

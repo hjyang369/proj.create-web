@@ -260,7 +260,7 @@ minimal-graphic: CSS 면과 타이포그래피로 구성합니다. 의미 없는
 - 세로 padding은 24px 이하로 하세요.
 - 입력에 값이 있는 항목만 표시하세요: 로고, 회사명, 대표자, 주소, 사업자등록번호, 이메일, 전화번호, optionalLinks.
 - 이메일은 mailto:, 전화번호는 tel: 링크를 사용하세요.
-- optionalLinks는 텍스트 없이 서로 다른 인라인 SVG 아이콘으로 표시하고 aria-label을 넣으세요.
+- optionalLinks의 값은 주소 목록입니다. 주소마다 텍스트 없이 인라인 SVG 아이콘을 하나씩 넣고 aria-label을 넣으세요. 같은 종류가 여러 개여도 모두 표시하세요.
 - naver_blog는 글이 있는 종이 모양, instagram은 카메라, youtube는 재생 버튼, homepage는 집 아이콘을 사용하세요.
 - footer 하단에는 회사명이 포함된 © 저작권 표시를 넣으세요.
 

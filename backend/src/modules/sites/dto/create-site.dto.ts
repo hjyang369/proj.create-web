@@ -12,6 +12,15 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
+/** 주소 하나 또는 목록을 비어 있지 않은 주소 목록으로 맞춘다. */
+export function toOptionalLinkList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : value ? [value] : [];
+  return raw
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+}
+
 export const PURPOSE_VALUES = [
   'company_intro',
   'investment',
@@ -133,22 +142,38 @@ export class CreateSiteDto {
   @MaxLength(100, { each: true })
   boardNames: string[] = [];
 
-  /** 링크 필드들 */
+  /** 링크 필드들. 종류마다 주소 목록이며, 예전 요청의 주소 하나도 목록으로 받는다. */
   @IsOptional()
-  @IsString()
-  blogLink: string = '';
+  @Transform(({ value }) => toOptionalLinkList(value))
+  @IsArray()
+  @ArrayMaxSize(5, { message: '블로그는 5개까지 넣을 수 있습니다.' })
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  blogLink: string[] = [];
 
   @IsOptional()
-  @IsString()
-  websiteLink: string = '';
+  @Transform(({ value }) => toOptionalLinkList(value))
+  @IsArray()
+  @ArrayMaxSize(5, { message: '홈페이지는 5개까지 넣을 수 있습니다.' })
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  websiteLink: string[] = [];
 
   @IsOptional()
-  @IsString()
-  instagramLink: string = '';
+  @Transform(({ value }) => toOptionalLinkList(value))
+  @IsArray()
+  @ArrayMaxSize(5, { message: '인스타그램은 5개까지 넣을 수 있습니다.' })
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  instagramLink: string[] = [];
 
   @IsOptional()
-  @IsString()
-  youtubeLink: string = '';
+  @Transform(({ value }) => toOptionalLinkList(value))
+  @IsArray()
+  @ArrayMaxSize(5, { message: '유튜브는 5개까지 넣을 수 있습니다.' })
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  youtubeLink: string[] = [];
 
   /** 참고 사이트 링크 */
   @IsOptional()

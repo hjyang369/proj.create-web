@@ -44,7 +44,7 @@ export type CreateSiteRecord = {
   /** 게시판 이름과 주소. 없으면 게시판을 만들지 않는다. */
   boardConfigs?: Array<{ name: string; slug: string }> | null;
   referenceUrl: string | null;
-  optionalLinks: Record<string, string> | null;
+  optionalLinks: Record<string, string[]> | null;
   /** 로고 이미지 (있으면) */
   logo: { url: string; originalName: string } | null;
   /** 사이트용 사진 목록 */

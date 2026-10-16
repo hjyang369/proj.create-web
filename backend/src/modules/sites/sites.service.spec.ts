@@ -115,10 +115,10 @@ const createDto = {
   mood: 'warm',
   pageCount: 1,
   selectedPages: [],
-  blogLink: '',
-  websiteLink: '',
-  instagramLink: '',
-  youtubeLink: '',
+  blogLink: [],
+  websiteLink: [],
+  instagramLink: [],
+  youtubeLink: [],
   referenceLink: '',
   extraRequest: '로고를 크게',
 } as CreateSiteDto;
@@ -725,7 +725,7 @@ describe('SitesService.updateInputs', () => {
         name: '저녁커피',
         tagline: '밤에 마시는 커피',
         industry: '카페',
-        blogLink: 'https://blog.naver.com/cafe',
+        blogLink: ['https://blog.naver.com/cafe', 'https://blog.naver.com/bean'],
       }),
     ).resolves.toEqual({
       industry: '카페',
@@ -741,10 +741,10 @@ describe('SitesService.updateInputs', () => {
       mood: 'warm',
       pageCount: '1',
       selectedPages: [],
-      blogLink: 'https://blog.naver.com/cafe',
-      websiteLink: '',
-      instagramLink: '',
-      youtubeLink: '',
+      blogLink: ['https://blog.naver.com/cafe', 'https://blog.naver.com/bean'],
+      websiteLink: [],
+      instagramLink: [],
+      youtubeLink: [],
       referenceLink: '',
       extraRequest: '로고를 크게',
       boardNames: [],
@@ -772,7 +772,12 @@ describe('SitesService.updateInputs', () => {
         pageComponents: null,
         reviewVisibility: null,
         referenceUrl: null,
-        optionalLinks: { naver_blog: 'https://blog.naver.com/cafe' },
+        optionalLinks: {
+          naver_blog: [
+            'https://blog.naver.com/cafe',
+            'https://blog.naver.com/bean',
+          ],
+        },
       },
     });
   });

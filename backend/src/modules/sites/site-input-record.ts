@@ -107,15 +107,23 @@ function readReviewVisibility(
   return value === "partial" || value === "full" ? value : null;
 }
 
-function readLinks(value: unknown): Record<string, string> | null {
+function readLinkList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  return raw.flatMap((item) =>
+    typeof item === "string" && item.trim() !== "" ? [item.trim()] : [],
+  );
+}
+
+function readLinks(value: unknown): Record<string, string[]> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
   }
 
-  const links: Record<string, string> = {};
+  const links: Record<string, string[]> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (typeof item === "string" && item.trim() !== "") {
-      links[key] = item;
+    const list = readLinkList(item);
+    if (list.length > 0) {
+      links[key] = list;
     }
   }
 
@@ -141,10 +149,10 @@ export type SiteInputForm = {
   mood: string;
   pageCount: string;
   selectedPages: string[];
-  blogLink: string;
-  websiteLink: string;
-  instagramLink: string;
-  youtubeLink: string;
+  blogLink: string[];
+  websiteLink: string[];
+  instagramLink: string[];
+  youtubeLink: string[];
   referenceLink: string;
   extraRequest: string;
   boardNames: string[];
@@ -158,10 +166,10 @@ function textOrEmpty(value: string | null): string {
 }
 
 function linkOrEmpty(
-  links: Record<string, string> | null,
+  links: Record<string, string[] | string> | null,
   key: string,
-): string {
-  return links?.[key] ?? "";
+): string[] {
+  return readLinkList(links?.[key]);
 }
 
 /** 저장된 생성 입력을 편집 화면 폼이 쓰는 필드로 되돌린다. */

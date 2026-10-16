@@ -70,7 +70,7 @@ describe("toCreateSiteRecord", () => {
       pageComponents: ["company_intro", "contact"],
       referenceUrl: "https://example.com",
       optionalLinks: {
-        naver_blog: "https://blog.naver.com/cafe",
+        naver_blog: ["https://blog.naver.com/cafe"],
       },
       boardConfigs: null,
       reviewVisibility: null,
@@ -126,6 +126,54 @@ describe("toCreateSiteRecord", () => {
     ]);
   });
 
+  it("같은 종류 링크가 여러 개면 목록으로 두고, 예전 주소 하나는 칸 하나로 둔다", () => {
+    const record = toCreateSiteRecord(
+      {
+        userId: 7,
+        businessType: "카페",
+        companyName: "아침커피",
+        oneLineIntro: "좋은 커피",
+        description: null,
+        address: null,
+        phone: null,
+        email: null,
+        purpose: "company_intro",
+        targetCustomer: null,
+        mainColor: null,
+        atmosphere: null,
+        extraRequest: null,
+        pageCount: 1,
+        pageComponents: null,
+        referenceUrl: null,
+        optionalLinks: {
+          naver_blog: [
+            "https://blog.naver.com/one",
+            "https://blog.naver.com/two",
+          ],
+          homepage: "https://cafe.example",
+        },
+      },
+      [],
+    );
+
+    expect(record.optionalLinks).toEqual({
+      naver_blog: [
+        "https://blog.naver.com/one",
+        "https://blog.naver.com/two",
+      ],
+      homepage: ["https://cafe.example"],
+    });
+    expect(toSiteInputForm(record)).toMatchObject({
+      blogLink: [
+        "https://blog.naver.com/one",
+        "https://blog.naver.com/two",
+      ],
+      websiteLink: ["https://cafe.example"],
+      instagramLink: [],
+      youtubeLink: [],
+    });
+  });
+
   it("저장된 리뷰 전체 공개를 생성 입력과 편집 폼에 되돌린다", () => {
     const record = toCreateSiteRecord(
       {
@@ -177,10 +225,10 @@ describe("toSiteInputForm", () => {
         pageComponents: ["company_intro", "contact"],
         referenceUrl: "https://example.com",
         optionalLinks: {
-          naver_blog: "https://blog.naver.com/cafe",
-          homepage: "https://cafe.example",
-          instagram: "https://instagram.com/cafe",
-          youtube: "https://youtube.com/@cafe",
+          naver_blog: ["https://blog.naver.com/cafe"],
+          homepage: ["https://cafe.example"],
+          instagram: ["https://instagram.com/cafe"],
+          youtube: ["https://youtube.com/@cafe"],
         },
         logo: { url: "/uploads/logos/logo.png", originalName: "logo.png" },
         photos: [
@@ -201,10 +249,10 @@ describe("toSiteInputForm", () => {
       mood: "warm",
       pageCount: "2",
       selectedPages: ["company_intro", "contact"],
-      blogLink: "https://blog.naver.com/cafe",
-      websiteLink: "https://cafe.example",
-      instagramLink: "https://instagram.com/cafe",
-      youtubeLink: "https://youtube.com/@cafe",
+      blogLink: ["https://blog.naver.com/cafe"],
+      websiteLink: ["https://cafe.example"],
+      instagramLink: ["https://instagram.com/cafe"],
+      youtubeLink: ["https://youtube.com/@cafe"],
       referenceLink: "https://example.com",
       extraRequest: "로고를 크게",
       boardNames: [],
@@ -243,8 +291,8 @@ describe("toSiteInputForm", () => {
       mood: "",
       pageCount: "1",
       selectedPages: [],
-      blogLink: "",
-      websiteLink: "",
+      blogLink: [],
+      websiteLink: [],
       referenceLink: "",
       extraRequest: "",
       logo: null,

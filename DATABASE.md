@@ -66,12 +66,14 @@ optional_links JSON 구조 예시:
 
 ```json
 {
-  "naver_blog": "https://blog.naver.com/...",
-  "homepage": "https://example.com",
-  "instagram": "https://instagram.com/...",
-  "youtube": "https://youtube.com/..."
+  "naver_blog": ["https://blog.naver.com/one", "https://blog.naver.com/two"],
+  "homepage": ["https://example.com"],
+  "instagram": ["https://instagram.com/..."],
+  "youtube": ["https://youtube.com/..."]
 }
 ```
+
+종류마다 주소는 5개까지다. 예전 데이터처럼 값이 주소 하나(문자열)여도 읽을 때는 칸이 하나인 목록으로 다룬다.
 
 page_components JSON 구조 예시:
 

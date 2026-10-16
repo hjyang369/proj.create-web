@@ -18,12 +18,13 @@ import {
   type CharCount,
 } from "../model/char-count";
 import {
+  OPTIONAL_LINK_LIMIT,
   describeBoardNamesIssue,
+  describeOptionalLinksIssue,
   describeReviewVisibilityIssue,
   describeFieldFormat,
   describeSafeExternalLink,
   describeSafeReferenceLink,
-  formatKindForLink,
   keepDigits,
   keepEmailChars,
   type FieldFormat,
@@ -45,10 +46,10 @@ type CreateSiteValues = {
   selectedPages: string[];
   reviewVisibility: "" | "partial" | "full";
   boardNames: string[];
-  blogLink: string;
-  websiteLink: string;
-  instagramLink: string;
-  youtubeLink: string;
+  blogLink: string[];
+  websiteLink: string[];
+  instagramLink: string[];
+  youtubeLink: string[];
   referenceLink: string;
   extraRequest: string;
 };
@@ -84,6 +85,22 @@ type PreviewPhoto = {
   existingUrl: string | null;
 };
 
+type LinkFieldName = (typeof LINK_FIELDS)[number]["name"];
+
+function asLinkList(value: string[] | string | null | undefined): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string");
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    return [value];
+  }
+  return [];
+}
+
+function filledLinkList(values: string[]): string[] {
+  return values.map((item) => item.trim()).filter((item) => item !== "");
+}
+
 const emptyValues: CreateSiteValues = {
   industry: "",
   name: "",
@@ -100,10 +117,10 @@ const emptyValues: CreateSiteValues = {
   selectedPages: [],
   reviewVisibility: "",
   boardNames: [],
-  blogLink: "",
-  websiteLink: "",
-  instagramLink: "",
-  youtubeLink: "",
+  blogLink: [],
+  websiteLink: [],
+  instagramLink: [],
+  youtubeLink: [],
   referenceLink: "",
   extraRequest: "",
 };
@@ -163,10 +180,10 @@ export function CreateSiteForm({
             : initialValues.selectedPages.includes("board")
               ? [""]
               : [],
-        blogLink: initialValues.blogLink,
-        websiteLink: initialValues.websiteLink,
-        instagramLink: initialValues.instagramLink,
-        youtubeLink: initialValues.youtubeLink,
+        blogLink: asLinkList(initialValues.blogLink),
+        websiteLink: asLinkList(initialValues.websiteLink),
+        instagramLink: asLinkList(initialValues.instagramLink),
+        youtubeLink: asLinkList(initialValues.youtubeLink),
         referenceLink: initialValues.referenceLink,
         extraRequest: initialValues.extraRequest,
       }
@@ -192,7 +209,7 @@ export function CreateSiteForm({
   const [expandedLinks, setExpandedLinks] = useState<Set<string>>(() => {
     const open = new Set<string>();
     for (const field of LINK_FIELDS) {
-      if (defaults[field.name].trim() !== "") {
+      if (defaults[field.name].some((url) => url.trim() !== "")) {
         open.add(field.name);
       }
     }
@@ -222,14 +239,17 @@ export function CreateSiteForm({
     values.purpose !== "" &&
     reviewIssue == null;
 
-  function toggleLink(name: string) {
+  function toggleLink(name: LinkFieldName) {
     setExpandedLinks((prev) => {
       const next = new Set(prev);
       if (next.has(name)) {
         next.delete(name);
-        setValue(name as keyof CreateSiteValues, "");
+        setValue(name, []);
       } else {
         next.add(name);
+        if (getValues(name).length === 0) {
+          setValue(name, [""]);
+        }
       }
       return next;
     });
@@ -259,6 +279,11 @@ export function CreateSiteForm({
       setSubmitError(reviewIssue);
       return;
     }
+    const linkIssue = describeOptionalLinksIssue(values);
+    if (linkIssue) {
+      setSubmitError(linkIssue);
+      return;
+    }
     const payload = {
       ...values,
       reviewVisibility: values.selectedPages.includes("review")
@@ -267,6 +292,10 @@ export function CreateSiteForm({
       boardNames: values.selectedPages.includes("board")
         ? values.boardNames.map((name) => name.trim())
         : [],
+      blogLink: filledLinkList(values.blogLink),
+      websiteLink: filledLinkList(values.websiteLink),
+      instagramLink: filledLinkList(values.instagramLink),
+      youtubeLink: filledLinkList(values.youtubeLink),
     };
     try {
       if (onSubmitForm) {
@@ -787,7 +816,7 @@ export function CreateSiteForm({
           <div>
             <p className="text-sm font-medium text-gray-800">링크</p>
             <p className="mt-0.5 text-xs text-gray-400">
-              추가할 링크를 선택하면 입력칸이 나타납니다.
+              종류를 고르면 주소를 여러 개 넣을 수 있습니다. 종류마다 5개까지입니다.
             </p>
             {/* 아이콘 칩 토글 */}
             <div className="mt-3 flex flex-wrap gap-2">
@@ -818,41 +847,77 @@ export function CreateSiteForm({
               0 && (
               <div className="mt-4 flex flex-col gap-4">
                 {LINK_FIELDS.filter((f) => expandedLinks.has(f.name)).map(
-                  ({ name, label, placeholder }) => {
-                    const format = describeFieldFormat(
-                      formatKindForLink(name),
-                      values[name],
-                    );
-                    const count = describeCharCount(
-                      values[name],
-                      INPUT_MAX_LENGTH,
-                    );
-
-                    return (
-                      <CountedField
-                        key={name}
-                        htmlFor={name}
-                        label={label}
-                        format={format}
-                        count={count}
-                      >
-                        <input
-                          id={name}
-                          type="text"
-                          placeholder={placeholder}
-                          className={countedInputClass(
-                            values[name],
-                            INPUT_MAX_LENGTH,
-                            !format.valid,
-                          )}
-                          {...register(name)}
-                        />
-                        {formatKindForLink(name) === "url" ? (
-                          <SafeLinkPreview value={values[name]} />
-                        ) : null}
-                      </CountedField>
-                    );
-                  },
+                  ({ name, label, placeholder }) => (
+                    <div key={name} className="flex flex-col gap-4">
+                      {values[name].map((url, index) => {
+                        const format = describeFieldFormat("url", url);
+                        const count = describeCharCount(url, INPUT_MAX_LENGTH);
+                        return (
+                          <CountedField
+                            key={`${name}-${index}`}
+                            htmlFor={`${name}-${index}`}
+                            label={
+                              values[name].length > 1
+                                ? `${label} ${index + 1}`
+                                : label
+                            }
+                            format={format}
+                            count={count}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                id={`${name}-${index}`}
+                                type="text"
+                                placeholder={placeholder}
+                                value={url}
+                                onChange={(event) => {
+                                  const next = [...values[name]];
+                                  next[index] = event.target.value;
+                                  setValue(name, next, { shouldDirty: true });
+                                }}
+                                className={countedInputClass(
+                                  url,
+                                  INPUT_MAX_LENGTH,
+                                  !format.valid,
+                                )}
+                              />
+                              {values[name].length > 1 ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setValue(
+                                      name,
+                                      values[name].filter(
+                                        (_, item) => item !== index,
+                                      ),
+                                      { shouldDirty: true },
+                                    )
+                                  }
+                                  className="h-11 shrink-0 px-3 text-sm text-gray-500 hover:text-black"
+                                >
+                                  빼기
+                                </button>
+                              ) : null}
+                            </div>
+                            <SafeLinkPreview value={url} />
+                          </CountedField>
+                        );
+                      })}
+                      {values[name].length < OPTIONAL_LINK_LIMIT ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setValue(name, [...values[name], ""], {
+                              shouldDirty: true,
+                            })
+                          }
+                          className="self-start h-10 px-4 text-sm text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        >
+                          + {label} 추가
+                        </button>
+                      ) : null}
+                    </div>
+                  ),
                 )}
               </div>
             )}

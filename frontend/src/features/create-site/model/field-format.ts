@@ -276,13 +276,16 @@ export type SiteInputFieldValues = {
   pageCount: string;
   selectedPages: string[];
   boardNames?: string[];
-  blogLink: string;
-  websiteLink: string;
-  instagramLink: string;
-  youtubeLink: string;
+  blogLink: string[];
+  websiteLink: string[];
+  instagramLink: string[];
+  youtubeLink: string[];
   referenceLink: string;
   extraRequest: string;
 };
+
+/** 블로그, 홈페이지, 인스타그램, 유튜브 각각 넣을 수 있는 주소 수 */
+export const OPTIONAL_LINK_LIMIT = 5;
 
 const fieldLimits = {
   industry: 255,
@@ -293,10 +296,6 @@ const fieldLimits = {
   email: 255,
   targetCustomer: 500,
   mainColor: 100,
-  blogLink: 500,
-  websiteLink: 500,
-  instagramLink: 500,
-  youtubeLink: 500,
   referenceLink: 500,
 } as const;
 
@@ -309,19 +308,42 @@ const fieldLabels: Record<keyof typeof fieldLimits, string> = {
   email: "이메일",
   targetCustomer: "타겟 고객",
   mainColor: "메인 컬러",
-  blogLink: "블로그",
-  websiteLink: "홈페이지",
-  instagramLink: "인스타그램",
-  youtubeLink: "유튜브",
   referenceLink: "참고 사이트",
 };
 
-const linkFields = [
-  "blogLink",
-  "websiteLink",
-  "instagramLink",
-  "youtubeLink",
+const optionalLinkFields = [
+  ["blogLink", "블로그", "블로그는 5개까지 넣을 수 있습니다."],
+  ["websiteLink", "홈페이지", "홈페이지는 5개까지 넣을 수 있습니다."],
+  ["instagramLink", "인스타그램", "인스타그램은 5개까지 넣을 수 있습니다."],
+  ["youtubeLink", "유튜브", "유튜브는 5개까지 넣을 수 있습니다."],
 ] as const;
+
+/** 비어 있는 칸은 빼고, 남은 주소가 많거나 형식이 아니면 안내한다. */
+export function describeOptionalLinksIssue(
+  values: Pick<
+    SiteInputFieldValues,
+    "blogLink" | "websiteLink" | "instagramLink" | "youtubeLink"
+  >,
+): string | null {
+  for (const [key, label, limitMessage] of optionalLinkFields) {
+    const links = values[key]
+      .map((item) => item.trim())
+      .filter((item) => item !== "");
+    if (links.length > OPTIONAL_LINK_LIMIT) {
+      return limitMessage;
+    }
+    for (const link of links) {
+      if (link.length > 500) {
+        return `${label}: 500자까지 입력해 주세요.`;
+      }
+      const format = describeFieldFormat("url", link);
+      if (!format.valid) {
+        return `${label}: ${format.message}`;
+      }
+    }
+  }
+  return null;
+}
 
 /** 저장 전에 고칠 내용이 있으면 그 안내 문장을 돌려준다. */
 export function describeSiteInputIssue(
@@ -371,11 +393,9 @@ export function describeSiteInputIssue(
     return "페이지 수는 1 이상의 숫자로 입력해 주세요.";
   }
 
-  for (const name of linkFields) {
-    const format = describeFieldFormat("url", values[name]);
-    if (!format.valid) {
-      return format.message;
-    }
+  const links = describeOptionalLinksIssue(values);
+  if (links) {
+    return links;
   }
 
   const reference = describeFieldFormat("referenceUrl", values.referenceLink);

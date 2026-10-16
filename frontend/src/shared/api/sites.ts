@@ -16,10 +16,10 @@ export interface CreateSitePayload {
   selectedPages: string[];
   reviewVisibility: "" | "partial" | "full";
   boardNames: string[];
-  blogLink: string;
-  websiteLink: string;
-  instagramLink: string;
-  youtubeLink: string;
+  blogLink: string[];
+  websiteLink: string[];
+  instagramLink: string[];
+  youtubeLink: string[];
   referenceLink: string;
   extraRequest: string;
 }

@@ -30,6 +30,34 @@ describe("CreateSiteDto mood", () => {
   });
 });
 
+describe("CreateSiteDto links", () => {
+  it("링크는 하나여도 목록으로 받고, 빈 칸은 빼며, 6개는 거절한다", async () => {
+    const dto = plainToInstance(CreateSiteDto, {
+      ...validBody,
+      blogLink: "https://blog.naver.com/one",
+      websiteLink: ["  ", "https://a.example", "https://b.example"],
+    });
+    const errors = await validate(dto);
+
+    expect(errors.find((error) => error.property === "blogLink")).toBeUndefined();
+    expect(errors.find((error) => error.property === "websiteLink")).toBeUndefined();
+    expect(dto.blogLink).toEqual(["https://blog.naver.com/one"]);
+    expect(dto.websiteLink).toEqual(["https://a.example", "https://b.example"]);
+
+    const tooMany = await messagesFor(
+      {
+        ...validBody,
+        blogLink: Array.from(
+          { length: 6 },
+          (_, index) => `https://blog.example/${index}`,
+        ),
+      },
+      "blogLink",
+    );
+    expect(tooMany).toContain("블로그는 5개까지 넣을 수 있습니다.");
+  });
+});
+
 describe("CreateSiteDto reviewVisibility", () => {
   it("리뷰 공개 범위가 일부 공개나 전체 공개가 아니면 거절한다", async () => {
     const messages = await messagesFor(

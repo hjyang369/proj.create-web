@@ -103,12 +103,20 @@ function toChatEntry(entry: StoredChatEntry): SiteChatEntry {
   };
 }
 
+function filledLinks(values: string[] | undefined): string[] {
+  return (values ?? []).map((item) => item.trim()).filter((item) => item !== '');
+}
+
 function toInputFields(dto: CreateSiteDto): SiteInputUpdate {
-  const optionalLinks: Record<string, string> = {};
-  if (dto.blogLink) optionalLinks.naver_blog = dto.blogLink;
-  if (dto.websiteLink) optionalLinks.homepage = dto.websiteLink;
-  if (dto.instagramLink) optionalLinks.instagram = dto.instagramLink;
-  if (dto.youtubeLink) optionalLinks.youtube = dto.youtubeLink;
+  const optionalLinks: Record<string, string[]> = {};
+  const blogLinks = filledLinks(dto.blogLink);
+  const websiteLinks = filledLinks(dto.websiteLink);
+  const instagramLinks = filledLinks(dto.instagramLink);
+  const youtubeLinks = filledLinks(dto.youtubeLink);
+  if (blogLinks.length > 0) optionalLinks.naver_blog = blogLinks;
+  if (websiteLinks.length > 0) optionalLinks.homepage = websiteLinks;
+  if (instagramLinks.length > 0) optionalLinks.instagram = instagramLinks;
+  if (youtubeLinks.length > 0) optionalLinks.youtube = youtubeLinks;
 
   const boardConfigs = boardConfigsFor(dto);
 

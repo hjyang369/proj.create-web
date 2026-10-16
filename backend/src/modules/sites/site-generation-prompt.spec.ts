@@ -21,7 +21,7 @@ const completeInput: CreateSiteRecord = {
   pageComponents: ["company_intro", "contact"],
   referenceUrl: "https://example.com/reference",
   optionalLinks: {
-    instagram: "https://instagram.com/crep",
+    instagram: ["https://instagram.com/crep"],
   },
   logo: {
     url: "/uploads/logos/logo.webp",
@@ -65,6 +65,22 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.user).toContain('"/uploads/logos/logo.webp"');
     expect(prompt.user).toContain('"/uploads/photos/office.webp"');
     expect(prompt.user).not.toContain('"userId"');
+  });
+
+  it("같은 종류 링크가 여러 개면 주소마다 아이콘을 넣으라고 한다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      optionalLinks: {
+        naver_blog: [
+          "https://blog.naver.com/one",
+          "https://blog.naver.com/two",
+        ],
+      },
+    });
+
+    expect(prompt.system).toContain("주소마다");
+    expect(prompt.user).toContain("https://blog.naver.com/one");
+    expect(prompt.user).toContain("https://blog.naver.com/two");
   });
 
   it("추가 요청에 탭이 있으면 입력 프롬프트에 탭 예시만 넣는다", () => {
