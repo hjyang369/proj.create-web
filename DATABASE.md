@@ -55,6 +55,7 @@ MySQL + Drizzle ORM을 사용한다.
 - extra_request: text, nullable — 추가 요청
 - page_count: int, default 1 — 페이지 수
 - page_components: json, nullable — 선택된 페이지 구성 목록 (배열)
+- review_visibility: enum('partial', 'full'), nullable — 리뷰 공개 범위. 리뷰를 끄면 비움. partial은 일부 공개, full은 전체 공개
 - board_configs: json, nullable — 게시판 이름과 주소. 예: [{"name":"뉴스","slug":"news"}]
 - reference_url: varchar(500), nullable — 참고 사이트 링크 (선택)
 - optional_links: json, nullable — 링크 (위치, 블로그, SNS 등)
@@ -77,6 +78,8 @@ page_components JSON 구조 예시:
 ```json
 ["company_intro", "service_intro", "contact", "faq", "directions"]
 ```
+
+review_visibility — 페이지 구성에 `review`가 있을 때만 `partial` 또는 `full`을 저장한다. `full`은 페이지 구성에 `auth`(로그인·회원가입)가 함께 있어야 한다.
 
 board_configs JSON — 게시판을 골랐을 때만 저장한다. 페이지 구성 문자열 배열과 따로 둔다.
 

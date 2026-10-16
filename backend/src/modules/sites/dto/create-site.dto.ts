@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -112,6 +113,14 @@ export class CreateSiteDto {
   @IsArray()
   @IsString({ each: true })
   selectedPages: string[] = [];
+
+  /** 리뷰 공개 범위. 리뷰를 켰을 때만 partial 또는 full */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== "" && value != null)
+  @IsIn(["partial", "full"], {
+    message: "리뷰 공개 범위를 선택해 주세요.",
+  })
+  reviewVisibility: "" | "partial" | "full" = "";
 
   /** 게시판 칩을 켠 뒤 적는 이름. 예: 뉴스, 소식 */
   @IsOptional()

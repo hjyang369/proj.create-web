@@ -1,3 +1,4 @@
+import { reviewPreviewScript, type ReviewVisibility } from "./review-preview";
 import { authViewFromHref, rewriteAuthPageLinks } from "./site-auth-links";
 import {
   keepAllowedActions,
@@ -170,6 +171,7 @@ export function toPreviewAssetUrl(src: string, assetOrigin: string): string {
 export function buildSitePreviewDocument(
   pages: SitePreviewPage[],
   assetOrigin?: string,
+  reviewVisibility: ReviewVisibility | null = null,
 ): string {
   const ordered = [...pages].sort((left, right) => left.pageOrder - right.pageOrder);
   const css = ordered
@@ -199,6 +201,7 @@ ${css}
 </head>
 <body>
 ${html}
+${reviewPreviewScript(reviewVisibility)}
 ${SITE_INTERACTION_SCRIPT}
 </body>
 </html>`;
@@ -263,7 +266,9 @@ const CLICK_DETECTOR_SCRIPT = [
   "if(!Object.prototype.hasOwnProperty.call(savedMains,key)) continue;",
   "boardMain(Number(key)).innerHTML=savedMains[key];",
   "delete savedMains[key];",
-  "}}",
+  "}",
+  "if(window.crepApplyReviews)window.crepApplyReviews();",
+  "}",
   "function boardPageOrder(node){",
   "var pageNode=node&&node.closest?node.closest('[data-crep-page]'):null;",
   "if(!pageNode) return 0;",
@@ -536,6 +541,7 @@ export function buildEditablePreviewDocument(
   pages: SitePreviewPage[],
   assetOrigin?: string,
   boardWriteBase = "",
+  reviewVisibility: ReviewVisibility | null = null,
 ): string {
   const ordered = [...pages].sort((left, right) => left.pageOrder - right.pageOrder);
   const css = ordered
@@ -570,6 +576,7 @@ ${css}
 <body>
 ${html}
 <script>var crepWriteBase=${JSON.stringify(boardWriteBase)};</script>
+${reviewPreviewScript(reviewVisibility)}
 ${CLICK_DETECTOR_SCRIPT}
 ${SITE_INTERACTION_SCRIPT}
 </body>

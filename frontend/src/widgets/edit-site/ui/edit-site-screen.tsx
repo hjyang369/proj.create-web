@@ -395,17 +395,19 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
   }
 
   /** iframe을 새 사이트 내용으로 다시 그린다. (AI 수정, 재생성, 수정 내역 이동, 저장 버전 열기) */
-  function previewDocument(pages: SiteEditorDetail["pages"]) {
+  function previewDocument(site: SiteEditorDetail) {
     const origin = typeof window === "undefined" ? "" : window.location.origin;
+    const visibility = site.inputs?.reviewVisibility;
     return buildEditablePreviewDocument(
-      pages,
+      site.pages,
       API_URL,
       origin ? boardWriteBase(origin, siteId) : "",
+      visibility === "partial" || visibility === "full" ? visibility : null,
     );
   }
 
   function showSite(site: SiteEditorDetail) {
-    setPreviewDoc(site.pages.length > 0 ? previewDocument(site.pages) : null);
+    setPreviewDoc(site.pages.length > 0 ? previewDocument(site) : null);
     setManualTarget(null);
     setPreview({ kind: "ready", site });
   }
@@ -486,7 +488,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         setHistoryIndex(0);
         setSavedKey(snapshotKey(site));
         setPreviewDoc(
-          site.pages.length > 0 ? previewDocument(site.pages) : null,
+          site.pages.length > 0 ? previewDocument(site) : null,
         );
         manualTargetRef.current = null;
         setManualTargetState(null);
@@ -543,6 +545,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
 
     if (rawView === "logout") {
       clearSiteMember(siteNumber);
+      postReviewSession();
       setPreviewBoardPath("/login");
       postBoardHtml(
         pageOrder,
@@ -591,6 +594,7 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
               password,
             });
       saveSiteMember(siteNumber, result.accessToken, result.member);
+      postReviewSession();
       setPreviewBoardPath("/login");
       postBoardHtml(
         pageOrder,
@@ -1357,6 +1361,18 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     );
   }
 
+  function postReviewSession() {
+    const siteNumber = Number(siteId);
+    const loggedIn =
+      Number.isInteger(siteNumber) &&
+      siteNumber > 0 &&
+      readSiteMember(siteNumber) != null;
+    previewFrameRef.current?.contentWindow?.postMessage(
+      { type: "crep-review-session", loggedIn },
+      "*",
+    );
+  }
+
   function changeView(nextView: SiteViewMode) {
     const nextEditing = nextView === "edit";
     editingRef.current = nextEditing;
@@ -1779,7 +1795,10 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
                 className={
                   view === "code" ? "hidden" : "h-full w-full border-0 bg-white"
                 }
-                onLoad={() => postPreviewMode(editingRef.current)}
+                onLoad={() => {
+                  postPreviewMode(editingRef.current);
+                  postReviewSession();
+                }}
               />
               {view === "code" ? (
                 <EditSiteCodeView pages={codePages} />

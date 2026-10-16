@@ -29,3 +29,13 @@ describe("CreateSiteDto mood", () => {
     expect(messages).toEqual([]);
   });
 });
+
+describe("CreateSiteDto reviewVisibility", () => {
+  it("리뷰 공개 범위가 일부 공개나 전체 공개가 아니면 거절한다", async () => {
+    const messages = await messagesFor(
+      { ...validBody, reviewVisibility: "all" },
+      "reviewVisibility",
+    );
+    expect(messages).toContain("리뷰 공개 범위를 선택해 주세요.");
+  });
+});

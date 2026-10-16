@@ -149,6 +149,17 @@ describe("fallbackSiteDesignSpec", () => {
     expect(spec.pages[0]?.sections[1]?.composition).toContain("구분선");
   });
 
+  it("리뷰를 고르면 메인 CTA 앞에 리뷰 섹션을 둔다", () => {
+    const spec = fallbackSiteDesignSpec({
+      ...input,
+      pageComponents: ["contact", "review"],
+    });
+    const types = spec.pages[0]?.sections.map((section) => section.type) ?? [];
+
+    expect(types.indexOf("reviews")).toBeGreaterThan(types.indexOf("contact"));
+    expect(types.at(-1)).toBe("cta");
+  });
+
   it("사진이 없는 소프트웨어는 그래픽 히어로를 고르고 문의 섹션을 넣지 않는다", () => {
     const spec = fallbackSiteDesignSpec({
       ...input,

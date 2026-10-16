@@ -282,6 +282,96 @@ describe('SitesService.create', () => {
     expect(created).toBe(false);
   });
 
+  it('리뷰 전체 공개는 로그인 없이 사이트를 만들지 않는다', async () => {
+    let created = false;
+    const service = new SitesService(
+      {
+        async listByUserId() {
+          return [];
+        },
+        async create() {
+          created = true;
+          return { id: 9 };
+        },
+        async saveGeneratedPages() {},
+        async findOwnedWithPages() {
+          return null;
+        },
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {},
+      },
+      {
+        async generatePages() {
+          return [generatedPage];
+        },
+      },
+    );
+
+    await expect(
+      service.create(
+        1,
+        { ...createDto, selectedPages: ['review'], reviewVisibility: 'full' },
+        undefined,
+        [],
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(created).toBe(false);
+  });
+
+  it('리뷰 일부 공개는 공개 범위를 저장하고 메인 메뉴에 리뷰를 넣는다', async () => {
+    let saved: CreateSiteRecord | undefined;
+    let savedPages: { siteId: number; pages: GeneratedSitePage[] } | undefined;
+    const service = new SitesService(
+      {
+        async listByUserId() {
+          return [];
+        },
+        async create(data) {
+          saved = data;
+          return { id: 9 };
+        },
+        async saveGeneratedPages(siteId, pages) {
+          savedPages = { siteId, pages };
+        },
+        async findOwnedWithPages() {
+          return null;
+        },
+        async findOwnedGenerationInput() {
+          return null;
+        },
+        async replaceGeneratedPages() {},
+      },
+      {
+        async generatePages() {
+          return [
+            {
+              ...generatedPage,
+              html: '<nav><a href="#home">홈</a></nav><main><h1>카페</h1></main>',
+            },
+          ];
+        },
+      },
+    );
+
+    await service.create(
+      1,
+      {
+        ...createDto,
+        selectedPages: ['review'],
+        reviewVisibility: 'partial',
+      },
+      undefined,
+      [],
+    );
+
+    expect(saved?.reviewVisibility).toBe('partial');
+    expect(savedPages?.pages[0]?.html).toContain('href="#reviews"');
+    expect(savedPages?.pages[0]?.html).toContain('id="reviews"');
+    expect(savedPages?.pages[0]?.html).not.toContain('data-review-login');
+  });
+
   it('AI 생성에 실패하면 페이지를 저장하지 않고 안내한다', async () => {
     let savedPages = false;
     const service = new SitesService(
@@ -658,6 +748,7 @@ describe('SitesService.updateInputs', () => {
       referenceLink: '',
       extraRequest: '로고를 크게',
       boardNames: [],
+      reviewVisibility: '',
       logo: null,
       photos: [],
     });
@@ -679,6 +770,7 @@ describe('SitesService.updateInputs', () => {
         extraRequest: '로고를 크게',
         pageCount: 1,
         pageComponents: null,
+        reviewVisibility: null,
         referenceUrl: null,
         optionalLinks: { naver_blog: 'https://blog.naver.com/cafe' },
       },

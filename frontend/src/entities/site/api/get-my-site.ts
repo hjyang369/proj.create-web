@@ -24,6 +24,7 @@ export type SiteInputValues = {
   mood: string;
   pageCount: string;
   selectedPages: string[];
+  reviewVisibility: "" | "partial" | "full";
   boardNames: string[];
   blogLink: string;
   websiteLink: string;

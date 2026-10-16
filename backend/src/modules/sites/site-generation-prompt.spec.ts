@@ -187,6 +187,36 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.system).not.toContain('href="/login"');
   });
 
+  it("리뷰를 고르지 않으면 리뷰 본문 표시를 요구하지 않는다", () => {
+    const prompt = buildSiteGenerationPrompt(completeInput);
+
+    expect(prompt.system).not.toContain("data-review-content");
+  });
+
+  it("리뷰 일부 공개는 메인 리뷰 구역을 요구하고 로그인 링크는 요구하지 않는다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      pageComponents: ["review"],
+      reviewVisibility: "partial",
+    });
+
+    expect(prompt.system).toContain('id="reviews"');
+    expect(prompt.system).toContain("data-review-content");
+    expect(prompt.system).toContain("로그인 링크를 넣지 마세요");
+    expect(prompt.user).toContain('"reviewVisibility": "partial"');
+  });
+
+  it("리뷰 전체 공개는 리뷰마다 로그인 링크를 요구한다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      pageComponents: ["review", "auth"],
+      reviewVisibility: "full",
+    });
+
+    expect(prompt.system).toContain("data-review-login");
+    expect(prompt.user).toContain('"reviewVisibility": "full"');
+  });
+
   it("게시판 이름과 목록 주소를 생성 요청에 넣고 글 내용은 만들지 않게 한다", () => {
     const prompt = buildSiteGenerationPrompt({
       ...completeInput,

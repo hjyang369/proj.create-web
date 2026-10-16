@@ -251,6 +251,14 @@ function sectionsFor(
   }
 
   if (includeContact) body.splice(body.length - 1, 0, contact);
+  if (input.pageComponents?.includes("review")) {
+    body.splice(body.length - 1, 0, {
+      type: "reviews",
+      variant: "quotes",
+      composition:
+        "CTA 앞에 짧은 후기 문장을 나열한다. 이름, 별점, 수치는 만들지 않는다.",
+    });
+  }
   return body;
 }
 

@@ -19,6 +19,7 @@ import {
 } from "../model/char-count";
 import {
   describeBoardNamesIssue,
+  describeReviewVisibilityIssue,
   describeFieldFormat,
   describeSafeExternalLink,
   describeSafeReferenceLink,
@@ -42,6 +43,7 @@ type CreateSiteValues = {
   mood: string;
   pageCount: string;
   selectedPages: string[];
+  reviewVisibility: "" | "partial" | "full";
   boardNames: string[];
   blogLink: string;
   websiteLink: string;
@@ -96,6 +98,7 @@ const emptyValues: CreateSiteValues = {
   mood: "",
   pageCount: "",
   selectedPages: [],
+  reviewVisibility: "",
   boardNames: [],
   blogLink: "",
   websiteLink: "",
@@ -149,6 +152,11 @@ export function CreateSiteForm({
         mood: initialValues.mood,
         pageCount: initialValues.pageCount,
         selectedPages: initialValues.selectedPages,
+        reviewVisibility:
+          initialValues.reviewVisibility === "partial" ||
+          initialValues.reviewVisibility === "full"
+            ? initialValues.reviewVisibility
+            : "",
         boardNames:
           initialValues.boardNames.length > 0
             ? initialValues.boardNames
@@ -204,10 +212,15 @@ export function CreateSiteForm({
   });
 
   const values = watch();
+  const reviewIssue = describeReviewVisibilityIssue(
+    values.selectedPages,
+    values.reviewVisibility,
+  );
   const canSubmit =
     values.name.trim() !== "" &&
     values.tagline.trim() !== "" &&
-    values.purpose !== "";
+    values.purpose !== "" &&
+    reviewIssue == null;
 
   function toggleLink(name: string) {
     setExpandedLinks((prev) => {
@@ -238,8 +251,19 @@ export function CreateSiteForm({
       setSubmitError(boardIssue);
       return;
     }
+    const reviewIssue = describeReviewVisibilityIssue(
+      values.selectedPages,
+      values.reviewVisibility,
+    );
+    if (reviewIssue) {
+      setSubmitError(reviewIssue);
+      return;
+    }
     const payload = {
       ...values,
+      reviewVisibility: values.selectedPages.includes("review")
+        ? values.reviewVisibility
+        : "",
       boardNames: values.selectedPages.includes("board")
         ? values.boardNames.map((name) => name.trim())
         : [],
@@ -635,12 +659,77 @@ export function CreateSiteForm({
                     if (!pages.includes("board") && hadBoard) {
                       setValue("boardNames", []);
                     }
+                    if (!pages.includes("review") && field.value.includes("review")) {
+                      setValue("reviewVisibility", "");
+                    }
                   }}
                   multi={true}
                 />
               )}
             />
           </Field>
+
+          {values.selectedPages.includes("review") ? (
+            <fieldset className="flex flex-col gap-3">
+              <legend className="text-sm font-medium text-gray-800">
+                리뷰 공개 범위
+              </legend>
+              <label className="flex items-start gap-3 text-sm text-gray-800">
+                <input
+                  type="radio"
+                  name="reviewVisibility"
+                  className="mt-1"
+                  checked={values.reviewVisibility === "partial"}
+                  onChange={() =>
+                    setValue("reviewVisibility", "partial", {
+                      shouldDirty: true,
+                    })
+                  }
+                />
+                <span>
+                  <span className="block">일부 공개</span>
+                  <span className="mt-0.5 block text-xs text-gray-500">
+                    누구든 리뷰 앞부분만 봅니다.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-gray-800">
+                <input
+                  type="radio"
+                  name="reviewVisibility"
+                  className="mt-1"
+                  checked={values.reviewVisibility === "full"}
+                  onChange={() => {
+                    setValue("reviewVisibility", "full", { shouldDirty: true });
+                    if (!values.selectedPages.includes("auth")) {
+                      setValue(
+                        "selectedPages",
+                        [...values.selectedPages, "auth"],
+                        { shouldDirty: true },
+                      );
+                    }
+                  }}
+                />
+                <span>
+                  <span className="block">전체 공개</span>
+                  <span className="mt-0.5 block text-xs text-gray-500">
+                    로그인한 방문자만 리뷰 전체를 봅니다.
+                  </span>
+                </span>
+              </label>
+              {values.reviewVisibility === "full" ? (
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                  전체 공개는 로그인·회원가입이 필요합니다. 페이지 구성에 함께
+                  선택해 두었습니다.
+                </p>
+              ) : null}
+              {reviewIssue ? (
+                <p role="alert" className="text-sm text-gray-800">
+                  {reviewIssue}
+                </p>
+              ) : null}
+            </fieldset>
+          ) : null}
 
           {values.selectedPages.includes("board") ? (
             <div className="flex flex-col gap-4">

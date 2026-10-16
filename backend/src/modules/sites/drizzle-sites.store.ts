@@ -98,6 +98,7 @@ export class DrizzleSitesStore implements SitesStore {
         extraRequest: data.extraRequest ?? null,
         pageCount: data.pageCount,
         pageComponents: data.pageComponents ?? null,
+        reviewVisibility: data.reviewVisibility ?? null,
         boardConfigs: data.boardConfigs ?? null,
         referenceUrl: data.referenceUrl ?? null,
         optionalLinks: data.optionalLinks ?? null,
@@ -274,6 +275,7 @@ export class DrizzleSitesStore implements SitesStore {
         extraRequest: siteInputs.extraRequest,
         pageCount: siteInputs.pageCount,
         pageComponents: siteInputs.pageComponents,
+        reviewVisibility: siteInputs.reviewVisibility,
         boardConfigs: siteInputs.boardConfigs,
         referenceUrl: siteInputs.referenceUrl,
         optionalLinks: siteInputs.optionalLinks,
@@ -329,6 +331,7 @@ export class DrizzleSitesStore implements SitesStore {
           extraRequest: data.extraRequest,
           pageCount: data.pageCount,
           pageComponents: data.pageComponents,
+          reviewVisibility: data.reviewVisibility ?? null,
           ...(data.boardConfigs
             ? { boardConfigs: data.boardConfigs }
             : {}),
@@ -492,6 +495,7 @@ export class DrizzleSitesStore implements SitesStore {
           extraRequest: draft.inputs.extraRequest,
           pageCount: draft.inputs.pageCount,
           pageComponents: draft.inputs.pageComponents,
+          reviewVisibility: draft.inputs.reviewVisibility ?? null,
           ...(draft.inputs.boardConfigs
             ? { boardConfigs: draft.inputs.boardConfigs }
             : {}),

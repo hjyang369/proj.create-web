@@ -201,6 +201,7 @@ export class SitesController {
         referenceLink: dto.inputs.referenceLink,
         extraRequest: dto.inputs.extraRequest,
         boardNames: dto.inputs.boardNames ?? [],
+        reviewVisibility: dto.inputs.reviewVisibility ?? "",
         logo: dto.inputs.logo,
         photos: dto.inputs.photos ?? [],
       },

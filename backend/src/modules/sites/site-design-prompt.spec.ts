@@ -41,4 +41,14 @@ describe("buildSiteDesignPrompt", () => {
     expect(prompt.user).toContain("/uploads/photos/clinic.webp");
     expect(prompt.user).not.toContain('"userId"');
   });
+
+  it("리뷰를 고르면 설계서에 리뷰 섹션을 요구한다", () => {
+    const prompt = buildSiteDesignPrompt({
+      ...input,
+      pageComponents: ["contact", "review"],
+    });
+
+    expect(prompt.system).toContain('type "reviews"');
+    expect(prompt.user).toContain('"review"');
+  });
 });

@@ -106,7 +106,12 @@ ${HERO_LAYOUTS.join(", ")}
 - 모든 섹션을 둥근 박스로 감싸기
 - 과도한 그라데이션과 그림자
 - 의미 없는 장식 도형
-- 근거 없는 수상, 매출, 고객 후기
+- 근거 없는 수상, 매출${
+    input.pageComponents?.includes("review")
+      ? ". 리뷰 섹션만 예외로, 사람 이름과 수치 없이 짧은 후기 문장을 쓴다"
+      : ", 고객 후기"
+  }
+- pageComponents에 review가 있을 때만 메인 페이지의 마지막 cta 바로 앞에 type "reviews" 섹션을 넣습니다.
 - 사용자가 제공하지 않은 회사 정보
 - photoUrls에 없는 이미지 주소
 

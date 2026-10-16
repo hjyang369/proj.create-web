@@ -386,6 +386,25 @@ export function describeSiteInputIssue(
   return null;
 }
 
+export type ReviewVisibility = "partial" | "full";
+
+/** 리뷰를 골랐을 때만 공개 범위를 검사한다. 문제가 없으면 null. */
+export function describeReviewVisibilityIssue(
+  selectedPages: string[],
+  reviewVisibility: string,
+): string | null {
+  if (!selectedPages.includes("review")) {
+    return null;
+  }
+  if (reviewVisibility !== "partial" && reviewVisibility !== "full") {
+    return "리뷰 공개 범위를 선택해 주세요.";
+  }
+  if (reviewVisibility === "full" && !selectedPages.includes("auth")) {
+    return "리뷰를 전체 공개하려면 로그인·회원가입을 함께 선택해 주세요.";
+  }
+  return null;
+}
+
 /** 게시판을 골랐을 때만 이름을 검사한다. 문제가 없으면 null. */
 export function describeBoardNamesIssue(
   selectedPages: string[],

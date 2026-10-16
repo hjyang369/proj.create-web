@@ -73,6 +73,7 @@ describe("toCreateSiteRecord", () => {
         naver_blog: "https://blog.naver.com/cafe",
       },
       boardConfigs: null,
+      reviewVisibility: null,
       logo: {
         url: "/uploads/logos/logo.png",
         originalName: "logo.png",
@@ -117,11 +118,41 @@ describe("toCreateSiteRecord", () => {
 
     expect(record.businessType).toBeNull();
     expect(record.pageComponents).toBeNull();
+    expect(record.reviewVisibility).toBeNull();
     expect(record.optionalLinks).toBeNull();
     expect(record.logo).toBeNull();
     expect(record.photos).toEqual([
       { url: "/uploads/photos/a.png", originalName: "a.png" },
     ]);
+  });
+
+  it("저장된 리뷰 전체 공개를 생성 입력과 편집 폼에 되돌린다", () => {
+    const record = toCreateSiteRecord(
+      {
+        userId: 1,
+        businessType: null,
+        companyName: "카페",
+        oneLineIntro: "좋은 커피",
+        description: null,
+        address: null,
+        phone: null,
+        email: null,
+        purpose: "sales",
+        targetCustomer: null,
+        mainColor: null,
+        atmosphere: null,
+        extraRequest: null,
+        pageCount: 1,
+        pageComponents: ["review", "auth"],
+        reviewVisibility: "full",
+        referenceUrl: null,
+        optionalLinks: null,
+      },
+      [],
+    );
+
+    expect(record.reviewVisibility).toBe("full");
+    expect(toSiteInputForm(record).reviewVisibility).toBe("full");
   });
 });
 
@@ -177,6 +208,7 @@ describe("toSiteInputForm", () => {
       referenceLink: "https://example.com",
       extraRequest: "로고를 크게",
       boardNames: [],
+      reviewVisibility: "",
       logo: { url: "/uploads/logos/logo.png", originalName: "logo.png" },
       photos: [{ url: "/uploads/photos/a.png", originalName: "a.png" }],
     });

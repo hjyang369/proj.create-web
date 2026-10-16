@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   describeBoardNamesIssue,
+  describeReviewVisibilityIssue,
   describeFieldFormat,
   describeSafeExternalLink,
   describeSafeReferenceLink,
@@ -300,5 +301,36 @@ describe("describeBoardNamesIssue", () => {
 
   it("이름이 있으면 통과한다", () => {
     assert.equal(describeBoardNamesIssue(["board"], ["뉴스", "소식"]), null);
+  });
+});
+
+describe("describeReviewVisibilityIssue", () => {
+  it("리뷰를 고르지 않았으면 공개 범위를 검사하지 않는다", () => {
+    assert.equal(describeReviewVisibilityIssue(["about"], ""), null);
+  });
+
+  it("리뷰를 골랐는데 공개 범위가 없으면 안내한다", () => {
+    assert.equal(
+      describeReviewVisibilityIssue(["review"], ""),
+      "리뷰 공개 범위를 선택해 주세요.",
+    );
+  });
+
+  it("일부 공개는 로그인 없이도 통과한다", () => {
+    assert.equal(describeReviewVisibilityIssue(["review"], "partial"), null);
+  });
+
+  it("전체 공개는 로그인·회원가입이 없으면 안내한다", () => {
+    assert.equal(
+      describeReviewVisibilityIssue(["review"], "full"),
+      "리뷰를 전체 공개하려면 로그인·회원가입을 함께 선택해 주세요.",
+    );
+  });
+
+  it("전체 공개는 로그인·회원가입이 있으면 통과한다", () => {
+    assert.equal(
+      describeReviewVisibilityIssue(["review", "auth"], "full"),
+      null,
+    );
   });
 });

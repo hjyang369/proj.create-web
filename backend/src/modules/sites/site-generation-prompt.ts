@@ -7,6 +7,7 @@ import {
   type InteractionKind,
 } from './interaction-rules.js';
 import type { SiteDesignPlan } from './site-design-spec.js';
+import { reviewPromptRules } from './review-visibility.js';
 
 export type SiteGenerationPrompt = {
   system: string;
@@ -67,6 +68,9 @@ export function buildSiteGenerationPrompt(
     ...(input.pageComponents && {
       requestedPageComponents: input.pageComponents,
     }),
+    ...(input.reviewVisibility && {
+      reviewVisibility: input.reviewVisibility,
+    }),
     ...(input.boardConfigs?.length && {
       boards: input.boardConfigs.map((board) => ({
         name: board.name,
@@ -114,6 +118,8 @@ ${input.boardConfigs
 `
     : "";
 
+  const reviewRule = reviewPromptRules(input.reviewVisibility);
+
   const authNavRule = input.pageComponents?.includes("auth")
     ? `
 [로그인]
@@ -143,7 +149,7 @@ ${designInstructions}
 
 ${INTERACTION_SYSTEM_RULES}
 - 모든 주요 section에는 사이트 전체에서 고유한 data-component-id와 의미 있는 data-component-type을 넣으세요.
-${boardNavRule}${authNavRule}
+${boardNavRule}${authNavRule}${reviewRule}
 
 [메인 페이지 및 섹션 구성]
 - pageOrder 1은 메인 페이지입니다.

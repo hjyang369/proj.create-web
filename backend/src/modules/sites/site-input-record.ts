@@ -16,6 +16,7 @@ export type StoredGenerationInput = {
   extraRequest: string | null;
   pageCount: number;
   pageComponents: unknown;
+  reviewVisibility?: unknown;
   boardConfigs?: unknown;
   referenceUrl: string | null;
   optionalLinks: unknown;
@@ -100,6 +101,12 @@ function readBoardConfigs(
   return configs.length > 0 ? configs : null;
 }
 
+function readReviewVisibility(
+  value: unknown,
+): "partial" | "full" | null {
+  return value === "partial" || value === "full" ? value : null;
+}
+
 function readLinks(value: unknown): Record<string, string> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
@@ -141,6 +148,7 @@ export type SiteInputForm = {
   referenceLink: string;
   extraRequest: string;
   boardNames: string[];
+  reviewVisibility: "" | "partial" | "full";
   logo: { url: string; originalName: string } | null;
   photos: Array<{ url: string; originalName: string }>;
 };
@@ -179,6 +187,7 @@ export function toSiteInputForm(record: CreateSiteRecord): SiteInputForm {
     referenceLink: textOrEmpty(record.referenceUrl),
     extraRequest: textOrEmpty(record.extraRequest),
     boardNames: record.boardConfigs?.map((board) => board.name) ?? [],
+    reviewVisibility: record.reviewVisibility ?? "",
     logo: record.logo,
     photos: record.photos,
   };
@@ -233,6 +242,7 @@ export function toCreateSiteRecord(
     extraRequest: input.extraRequest,
     pageCount: input.pageCount,
     pageComponents: readStringList(input.pageComponents),
+    reviewVisibility: readReviewVisibility(input.reviewVisibility),
     boardConfigs: readBoardConfigs(input.boardConfigs),
     referenceUrl: input.referenceUrl,
     optionalLinks: readLinks(input.optionalLinks),

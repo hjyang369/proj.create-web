@@ -11,6 +11,12 @@ import {
   boardConfigsFromNames,
 } from "../boards/board-names.js";
 import { insertBoardNav } from "../boards/insert-board-nav.js";
+import {
+  ReviewVisibilityError,
+  applyReviewMarkup,
+  resolveReviewVisibility,
+  type ReviewVisibility,
+} from "./review-visibility.js";
 import type { BoardConfig } from "../boards/board-slug.js";
 import { randomUUID } from "crypto";
 import { extname, join } from "path";
@@ -121,6 +127,7 @@ function toInputFields(dto: CreateSiteDto): SiteInputUpdate {
     extraRequest: dto.extraRequest || null,
     pageCount: dto.pageCount,
     pageComponents: dto.selectedPages.length > 0 ? dto.selectedPages : null,
+    reviewVisibility: reviewVisibilityFor(dto),
     ...(boardConfigs ? { boardConfigs } : {}),
     referenceUrl: dto.referenceLink || null,
     optionalLinks:
@@ -145,6 +152,20 @@ function boardConfigsFor(dto: CreateSiteDto): BoardConfig[] | undefined {
   return configs;
 }
 
+function reviewVisibilityFor(dto: CreateSiteDto): ReviewVisibility | null {
+  try {
+    return resolveReviewVisibility({
+      selectedPages: dto.selectedPages ?? [],
+      reviewVisibility: dto.reviewVisibility,
+    });
+  } catch (error) {
+    if (error instanceof ReviewVisibilityError) {
+      throw new BadRequestException(error.message);
+    }
+    throw error;
+  }
+}
+
 function assertNamedBoards(dto: CreateSiteDto): void {
   if (!dto.selectedPages.includes("board")) {
     return;
@@ -164,6 +185,19 @@ function withBoardNav<T extends { html: string }>(
   return pages.map((page) => ({
     ...page,
     html: insertBoardNav(page.html, configs),
+  }));
+}
+
+function withReviewMarkup<T extends { html: string; pageOrder: number }>(
+  pages: T[],
+  visibility: ReviewVisibility | null | undefined,
+): T[] {
+  if (!visibility) {
+    return pages;
+  }
+  return pages.map((page) => ({
+    ...page,
+    html: applyReviewMarkup(page.html, page.pageOrder, visibility),
   }));
 }
 
@@ -331,6 +365,7 @@ export class SitesService {
     }
 
     assertNamedBoards(dto);
+    reviewVisibilityFor(dto);
 
     // ── 이미지 파일 디스크 저장 (순차 처리 — I/O 집중 방지)
     const logoResult = logoFile ? await saveFile(logoFile, "logos") : null;
@@ -350,9 +385,12 @@ export class SitesService {
     const created = await this.sites.create(record);
 
     try {
-      const pages = withBoardNav(
-        await this.generator.generatePages(record),
-        record.boardConfigs,
+      const pages = withReviewMarkup(
+        withBoardNav(
+          await this.generator.generatePages(record),
+          record.boardConfigs,
+        ),
+        record.reviewVisibility,
       );
       await this.sites.saveGeneratedPages(created.id, pages);
     } catch (error) {
@@ -386,6 +424,7 @@ export class SitesService {
     }
 
     assertNamedBoards(dto);
+    reviewVisibilityFor(dto);
 
     const current = await this.sites.findOwnedGenerationInput(userId, siteId);
     if (!current || current.userId !== userId) {
@@ -415,9 +454,12 @@ export class SitesService {
 
     let pages;
     try {
-      pages = withBoardNav(
-        await this.generator.generatePages(record),
-        record.boardConfigs,
+      pages = withReviewMarkup(
+        withBoardNav(
+          await this.generator.generatePages(record),
+          record.boardConfigs,
+        ),
+        record.reviewVisibility,
       );
     } catch (error) {
       const message =
@@ -552,6 +594,7 @@ export class SitesService {
       referenceLink: draft.inputs.referenceLink,
       extraRequest: draft.inputs.extraRequest,
       boardNames: draft.inputs.boardNames ?? [],
+      reviewVisibility: draft.inputs.reviewVisibility ?? "",
     });
     const nextImages = {
       logo: draft.inputs.logo,

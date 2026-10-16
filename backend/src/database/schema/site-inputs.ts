@@ -44,6 +44,7 @@ export const siteInputs = mysqlTable("site_inputs", {
   ]),
   pageCount: int("page_count").notNull().default(1),
   pageComponents: json("page_components"),
+  reviewVisibility: mysqlEnum("review_visibility", ["partial", "full"]),
   boardConfigs: json("board_configs"),
   referenceUrl: varchar("reference_url", { length: 500 }),
   optionalLinks: json("optional_links"),
