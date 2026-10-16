@@ -209,6 +209,23 @@ snapshot JSON 구조 예시:
 
 ---
 
+## site_members
+
+만들어진 사이트 안의 회원. Crep AI 사장님 계정(`users`)과 따로 둔다.
+같은 이메일이어도 사이트마다 다른 회원이다.
+
+- id: bigint, PK, auto increment
+- site_id: bigint, FK → sites.id
+- email: varchar(255)
+- name: varchar(100)
+- password_hash: varchar(255)
+- created_at: datetime
+- updated_at: datetime
+
+인덱스: unique `(site_id, email)`
+
+---
+
 ## 관계
 
 ```
@@ -222,6 +239,7 @@ sites
   1 : N  site_chat_history
   1 : N  site_boards
             1 : N  site_posts
+  1 : N  site_members
 ```
 
 ---

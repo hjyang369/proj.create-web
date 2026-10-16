@@ -8,7 +8,13 @@ export type AuthUser = {
 export function toAuthUser(payload: {
   sub?: unknown;
   email?: unknown;
+  type?: unknown;
+  siteId?: unknown;
 }): AuthUser {
+  if (payload.type === "site-member") {
+    throw new UnauthorizedException("로그인이 필요합니다.");
+  }
+
   if (
     typeof payload.sub !== "number" ||
     !Number.isInteger(payload.sub) ||

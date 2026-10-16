@@ -45,6 +45,7 @@ import {
   readEditableFromHtml,
   regenerateSiteDraft,
   saveSiteDraft,
+  authPageChoices,
   editorPageChoices,
   previewPathForPages,
   toPreviewAssetUrl,
@@ -58,6 +59,17 @@ import {
   type SiteVersionList,
 } from "@/entities/site";
 import { CreateSiteForm, type SiteFormSubmit } from "@/features/create-site";
+import {
+  authPageSources,
+  clearSiteMember,
+  loginSiteMember,
+  readSiteMember,
+  saveSiteMember,
+  signupSiteMember,
+  siteAuthFieldError,
+  siteAuthFormHtml,
+  siteAuthStatusHtml,
+} from "@/features/site-auth";
 import { API_URL } from "@/shared/api";
 import { storedChatsToEditLog } from "../model/edit-log-chat";
 import {
@@ -511,6 +523,93 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
     );
   }
 
+  /** 미리보기 사이트의 본문만 로그인·회원가입으로 바꾼다. 헤더와 메뉴는 그대로 둔다. */
+  async function openSiteAuth(data: object) {
+    const record = data as Record<string, unknown>;
+    const siteNumber = Number(siteId);
+    if (!Number.isInteger(siteNumber) || siteNumber <= 0) return;
+
+    const rawView = typeof record.view === "string" ? record.view : "";
+    const pageOrder =
+      typeof record.pageOrder === "number" && Number.isInteger(record.pageOrder)
+        ? record.pageOrder
+        : boardPageOrderRef.current;
+    boardPageOrderRef.current = pageOrder;
+
+    if (rawView === "close") {
+      setPreviewBoardPath(null);
+      return;
+    }
+
+    if (rawView === "logout") {
+      clearSiteMember(siteNumber);
+      setPreviewBoardPath("/login");
+      postBoardHtml(
+        pageOrder,
+        siteAuthFormHtml({ view: "login", email: "" }),
+      );
+      return;
+    }
+
+    const view = rawView === "signup" ? "signup" : rawView === "login" ? "login" : "";
+    if (!view) return;
+
+    if (record.type !== "crep-site-auth-submit") {
+      const session = readSiteMember(siteNumber);
+      setPreviewBoardPath(view === "signup" ? "/signup" : "/login");
+      postBoardHtml(
+        pageOrder,
+        session && view === "login"
+          ? siteAuthStatusHtml({ name: session.member.name })
+          : siteAuthFormHtml({ view, email: "", name: "" }),
+      );
+      return;
+    }
+
+    const email = typeof record.email === "string" ? record.email : "";
+    const name = typeof record.name === "string" ? record.name : "";
+    const password = typeof record.password === "string" ? record.password : "";
+    const fieldError = siteAuthFieldError({ view, email, name, password });
+    if (fieldError) {
+      postBoardHtml(
+        pageOrder,
+        siteAuthFormHtml({ view, email, name, error: fieldError }),
+      );
+      return;
+    }
+
+    try {
+      const result =
+        view === "signup"
+          ? await signupSiteMember(siteNumber, {
+              email: email.trim(),
+              name: name.trim(),
+              password,
+            })
+          : await loginSiteMember(siteNumber, {
+              email: email.trim(),
+              password,
+            });
+      saveSiteMember(siteNumber, result.accessToken, result.member);
+      setPreviewBoardPath("/login");
+      postBoardHtml(
+        pageOrder,
+        siteAuthStatusHtml({ name: result.member.name }),
+      );
+    } catch (error: unknown) {
+      postBoardHtml(
+        pageOrder,
+        siteAuthFormHtml({
+          view,
+          email,
+          name,
+          error:
+            error instanceof Error ? error.message : "로그인에 실패했습니다.",
+        }),
+      );
+    }
+  }
+
   /** 미리보기 사이트의 본문만 게시판으로 바꾼다. 헤더와 메뉴는 그대로 둔다. */
   async function openSiteBoard(data: object) {
     const record = data as Record<string, unknown>;
@@ -757,6 +856,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
 
     if (message.type === "crep-board" || message.type === "crep-board-save") {
       void openSiteBoard(data);
+      return;
+    }
+
+    if (
+      message.type === "crep-site-auth" ||
+      message.type === "crep-site-auth-submit"
+    ) {
+      void openSiteAuth(data);
       return;
     }
 
@@ -1512,6 +1619,19 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
       html: post.html,
       css: post.css,
     })),
+    ...authPageSources(
+      preview.kind === "ready" ? preview.site.pages : [],
+      preview.kind === "ready"
+        ? (preview.site.inputs?.selectedPages ?? [])
+        : [],
+    ).map((page, index) => ({
+      pageOrder: 3000 + index,
+      pageType: page.pageType,
+      folder: "pages",
+      fileLabel: page.fileLabel,
+      html: page.html,
+      css: page.css,
+    })),
   ];
 
   function selectEditorPage(pageId: string) {
@@ -1526,6 +1646,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
         postId: Number(postMatch[2]),
         pageOrder: currentSite?.pages[0]?.pageOrder ?? 1,
         label: board?.name ?? slug,
+      });
+      return;
+    }
+    if (pageId === "auth:login" || pageId === "auth:signup") {
+      void openSiteAuth({
+        type: "crep-site-auth",
+        view: pageId === "auth:signup" ? "signup" : "login",
+        pageOrder: currentSite?.pages[0]?.pageOrder ?? 1,
       });
       return;
     }
@@ -1591,11 +1719,14 @@ export function EditSiteScreen({ siteId }: { siteId: string }) {
             previewBoardPath ??
             previewPathForPages(currentSite?.pages ?? [], previewPageOrder)
           }
-          pages={editorPageChoices(
-            currentSite?.pages ?? [],
-            editorBoards,
-            boardPosts,
-          )}
+          pages={[
+            ...editorPageChoices(
+              currentSite?.pages ?? [],
+              editorBoards,
+              boardPosts,
+            ),
+            ...authPageChoices(currentSite?.inputs?.selectedPages ?? []),
+          ]}
           onSelectPage={selectEditorPage}
           viewport={viewport}
           onChangeViewport={setViewport}

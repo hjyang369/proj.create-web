@@ -14,4 +14,15 @@ describe("toAuthUser", () => {
       UnauthorizedException,
     );
   });
+
+  it("사이트 회원 토큰은 사장님 로그인으로 보지 않는다", () => {
+    expect(() =>
+      toAuthUser({
+        sub: 4,
+        email: "guest@example.com",
+        type: "site-member",
+        siteId: 1,
+      }),
+    ).toThrow(UnauthorizedException);
+  });
 });

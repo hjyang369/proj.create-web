@@ -195,7 +195,7 @@ describe("buildEditablePreviewDocument", () => {
     const document = buildEditablePreviewDocument([
       { pageOrder: 1, html: "<main></main>", css: "" },
     ]);
-    const start = document.indexOf("closest('.crep-board')){");
+    const start = document.indexOf("closest('.crep-auth')");
     const block = document.slice(start, start + 280);
 
     assert.ok(start >= 0);

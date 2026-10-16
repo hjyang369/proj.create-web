@@ -110,7 +110,17 @@ ${input.boardConfigs
   .map((board) => `- ${board.name}: /board/${board.slug}`)
   .join("\n")}
 - 게시판 글 목록, 글 내용은 HTML로 만들지 않습니다. 링크만 넣으세요.
-- 게시판 링크만 /board/주소를 사용합니다. 그 외 메뉴는 href="#섹션id"만 사용하세요.
+- 게시판 링크만 /board/주소를 사용합니다. 로그인 규칙을 받은 경우 그 버튼만 예외입니다. 그 외 메뉴는 href="#섹션id"만 사용하세요.
+`
+    : "";
+
+  const authNavRule = input.pageComponents?.includes("auth")
+    ? `
+[로그인]
+- requestedPageComponents에 "auth"가 있으므로 모든 페이지 nav 메뉴 맨 오른쪽에 "로그인" 링크를 넣으세요.
+- 로그인 링크는 href="/login"만 사용하세요. 서브페이지도 index.html이 아니라 /login입니다.
+- 로그인 링크의 글자, 크기, 색, 여백은 모든 페이지에서 같아야 합니다.
+- 로그인 폼이나 회원가입 폼은 HTML로 만들지 마세요. 메뉴의 로그인 링크만 넣으세요.
 `
     : "";
 
@@ -133,7 +143,7 @@ ${designInstructions}
 
 ${INTERACTION_SYSTEM_RULES}
 - 모든 주요 section에는 사이트 전체에서 고유한 data-component-id와 의미 있는 data-component-type을 넣으세요.
-${boardNavRule}
+${boardNavRule}${authNavRule}
 
 [메인 페이지 및 섹션 구성]
 - pageOrder 1은 메인 페이지입니다.
@@ -157,7 +167,9 @@ ${boardNavRule}
 [다중 페이지]
 - pageCount와 정확히 같은 수의 페이지를 생성합니다.
 - 서브페이지는 메인 내용을 단순 반복하지 않습니다.
-- 모든 페이지에서 공통 컬러, 폰트, Header/Footer 디자인을 유지합니다.
+- 모든 페이지의 header, nav, footer는 같은 HTML 구조와 같은 CSS를 그대로 반복하세요.
+- 페이지마다 메뉴 순서, 로고 크기, 색, 여백, 글자 크기를 바꾸지 마세요.
+- 서브페이지의 본문만 다르게 하고, header와 footer는 메인 페이지와 같은 디자인을 복사하세요.
 - 서브페이지마다 콘텐츠 목적에 적합한 개별 레이아웃을 사용합니다.
 
 [Header/Nav]
@@ -166,11 +178,15 @@ ${boardNavRule}
 - nav 세로 padding은 12px 이하로 하세요.
 - logoUrl이 있으면 사용하고 없으면 companyName을 텍스트 로고로 사용하세요.
 - nav/footer 로고에는 height, border-radius, box-shadow, border를 지정하지 마세요.
-- 모든 페이지의 메뉴 항목은 동일하며 메인 페이지의 주요 section으로 이동합니다.
+- 모든 페이지의 header와 nav는 같은 구조, 같은 메뉴, 같은 색과 크기를 사용하세요. 메뉴 항목은 동일하며 메인 페이지의 주요 section으로 이동합니다. 서브페이지에서 달라지는 것은 섹션 링크의 index.html 접두사뿐입니다.
 - 메인 페이지: href="#services"
 - 서브페이지: href="index.html#services"
 - 고정 Header에 section이 가리지 않도록 scroll-margin-top을 적용하세요.
-- 영역 이동은 href="#섹션id"만 사용하세요.
+- 영역 이동은 href="#섹션id"만 사용하세요.${
+    input.pageComponents?.includes("auth")
+      ? ' 로그인 링크 href="/login"만 예외입니다.'
+      : ""
+  }
 - 모바일 메뉴는 숨긴 checkbox와 label만 사용하세요. data-action은 쓰지 마세요.
 <div class="crep-nav">
   <input class="crep-nav__toggle" type="checkbox" id="crep-nav-toggle">
@@ -233,6 +249,7 @@ minimal-graphic: CSS 면과 타이포그래피로 구성합니다. 의미 없는
 - requestedPageComponents에 "contact"가 있을 때만 문의 section을 추가하세요.
 
 [Footer]
+- 모든 페이지의 footer HTML과 CSS는 메인 페이지와 같게 복사하세요. 페이지마다 다시 디자인하지 마세요.
 - 모든 페이지에 반드시 포함하세요.
 - 세로 padding은 24px 이하로 하세요.
 - 입력에 값이 있는 항목만 표시하세요: 로고, 회사명, 대표자, 주소, 사업자등록번호, 이메일, 전화번호, optionalLinks.

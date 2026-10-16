@@ -41,6 +41,7 @@ export {
   toPreviewAssetUrl,
   toPreviewHref,
 } from "./model/site-preview";
+export { authPageChoices, authViewFromHref } from "./model/site-auth-links";
 export {
   diffElementEdit,
   editHtmlElement,

@@ -1,3 +1,4 @@
+import { authViewFromHref, rewriteAuthPageLinks } from "./site-auth-links";
 import {
   keepAllowedActions,
   SITE_INTERACTION_SCRIPT,
@@ -151,6 +152,8 @@ export function boardSlugFromHref(href: string): string | null {
 
 /** 직접 편집한 링크 값을 미리보기용으로 바꾼다. (사이트 안 .html 링크 → 앵커) */
 export function toPreviewHref(href: string): string {
+  const auth = authViewFromHref(href);
+  if (auth) return `/${auth}`;
   const match = href.match(
     /^(?!https?:|mailto:|tel:)(?:\.\/|\/)?[^"'#]*?\.html(#.*)?$/i,
   );
@@ -177,7 +180,9 @@ export function buildSitePreviewDocument(
     .join("\n");
   const html = ordered
     .map((page) => {
-      const safeHtml = rewritePreviewSectionLinks(sanitizePreviewHtml(page.html));
+      const safeHtml = rewritePreviewSectionLinks(
+        rewriteAuthPageLinks(sanitizePreviewHtml(page.html)),
+      );
       return assetOrigin ? rewriteUploadUrls(safeHtml, assetOrigin) : safeHtml;
     })
     .join("\n");
@@ -265,6 +270,12 @@ const CLICK_DETECTOR_SCRIPT = [
   "var value=parseInt(pageNode.getAttribute('data-crep-page'),10);",
   "return isNaN(value)?0:value;",
   "}",
+  "function authTarget(href){",
+  "var path=String(href||'').split(/[?#]/)[0].replace(/^\\.\\//,'').replace(/^\\//,'').replace(/\\.html$/i,'').toLowerCase();",
+  "if(path==='login'||path==='signin'||path==='sign-in') return 'login';",
+  "if(path==='signup'||path==='sign-up'||path==='register'||path==='join') return 'signup';",
+  "return '';",
+  "}",
   "function boardTarget(href){",
   "var match=String(href||'').match(/^\\/board\\/([a-z0-9-]+)(?:\\/([a-z0-9-]+))?\\/?$/i);",
   "if(!match) return null;",
@@ -288,6 +299,12 @@ const CLICK_DETECTOR_SCRIPT = [
   "if(!el||!el.tagName) el=el.parentElement;",
   "var link=el&&el.closest?el.closest('a'):null;",
   "if(link){",
+  "var auth=authTarget(link.getAttribute('href')||'');",
+  "if(auth){",
+  "window.parent.postMessage({type:'crep-site-auth',view:auth,pageOrder:boardPageOrder(link)},'*');",
+  "e.preventDefault();",
+  "e.stopPropagation();",
+  "return;}",
   "var target=boardTarget(link.getAttribute('href')||'');",
   "if(target){",
   "if(target.view==='write'&&openCrepWrite(target.slug)){e.preventDefault();e.stopPropagation();return;}",
@@ -295,7 +312,7 @@ const CLICK_DETECTOR_SCRIPT = [
   "e.preventDefault();",
   "e.stopPropagation();",
   "return;}",
-  "if(!(link.closest&&link.closest('.crep-board'))) restoreBoards();",
+  "if(!(link.closest&&link.closest('.crep-board'))){restoreBoards();window.parent.postMessage({type:'crep-site-auth',view:'close'},'*');}",
   "}",
   "var control=el&&el.closest?el.closest('[data-crep-board]'):null;",
   "if(control){",
@@ -306,8 +323,12 @@ const CLICK_DETECTOR_SCRIPT = [
   "e.preventDefault();e.stopPropagation();return;}",
   "window.parent.postMessage({type:'crep-board',slug:control.getAttribute('data-slug')||'',view:view,postId:parseInt(control.getAttribute('data-post')||'0',10)||0,page:parseInt(control.getAttribute('data-page')||'1',10)||1,pageOrder:boardPageOrder(control)},'*');",
   "e.preventDefault();e.stopPropagation();return;}",
-  "if(el&&el.closest&&el.closest('.crep-board')){",
-  "if(!(el.closest&&el.closest('[data-crep-board-form]'))){e.preventDefault();e.stopPropagation();}",
+  "var authControl=el&&el.closest?el.closest('[data-crep-auth]'):null;",
+  "if(authControl){",
+  "window.parent.postMessage({type:'crep-site-auth',view:authControl.getAttribute('data-crep-auth')||'',pageOrder:boardPageOrder(authControl)},'*');",
+  "e.preventDefault();e.stopPropagation();return;}",
+  "if(el&&el.closest&&(el.closest('.crep-board')||el.closest('.crep-auth'))){",
+  "if(!(el.closest&&(el.closest('[data-crep-board-form]')||el.closest('[data-crep-auth-form]')))){e.preventDefault();e.stopPropagation();}",
   "return;}",
   "if(!editing)return;",
   "if(!el||el===document.body||el===document.documentElement) return;",
@@ -465,7 +486,15 @@ const CLICK_DETECTOR_SCRIPT = [
   "reportPage();",
   "document.addEventListener('submit',function(e){",
   "var form=e.target;",
-  "if(!form||!form.getAttribute||form.getAttribute('data-crep-board-form')!=='save') return;",
+  "if(!form||!form.getAttribute) return;",
+  "var authForm=form.getAttribute('data-crep-auth-form');",
+  "if(authForm==='login'||authForm==='signup'){",
+  "e.preventDefault();",
+  "e.stopPropagation();",
+  "function field(name){var el=form.querySelector('[name=\"'+name+'\"]');return el?el.value:'';}",
+  "window.parent.postMessage({type:'crep-site-auth-submit',view:authForm,email:field('email'),name:field('name'),password:field('password'),pageOrder:boardPageOrder(form)},'*');",
+  "return;}",
+  "if(form.getAttribute('data-crep-board-form')!=='save') return;",
   "e.preventDefault();",
   "e.stopPropagation();",
   "var titleEl=form.querySelector('[name=\"title\"]');",
@@ -517,7 +546,9 @@ export function buildEditablePreviewDocument(
     .join("\n");
   const html = ordered
     .map((page) => {
-      const safeHtml = rewritePreviewSectionLinks(sanitizePreviewHtml(page.html));
+      const safeHtml = rewritePreviewSectionLinks(
+        rewriteAuthPageLinks(sanitizePreviewHtml(page.html)),
+      );
       const withOrigin = assetOrigin ? rewriteUploadUrls(safeHtml, assetOrigin) : safeHtml;
       // head의 meta, title은 브라우저가 칸의 자식으로 남겨 헤더 번호를 뒤로 민다.
       // 서버는 body 안만 세므로, 편집 화면에도 body 안만 넣는다.

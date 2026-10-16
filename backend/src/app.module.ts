@@ -5,6 +5,7 @@ import { AppService } from "./app.service.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { BoardsModule } from "./modules/boards/boards.module.js";
+import { SiteAuthModule } from "./modules/site-auth/site-auth.module.js";
 import { SitesModule } from "./modules/sites/sites.module.js";
 
 @Module({
@@ -16,6 +17,7 @@ import { SitesModule } from "./modules/sites/sites.module.js";
     AuthModule,
     SitesModule,
     BoardsModule,
+    SiteAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

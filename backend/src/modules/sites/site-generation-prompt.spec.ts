@@ -159,6 +159,34 @@ describe("buildSiteGenerationPrompt", () => {
     expect(prompt.user).toContain('"companyName": "크레프 스튜디오"');
   });
 
+  it("모든 페이지의 메뉴와 푸터를 같은 디자인으로 반복하게 한다", () => {
+    const prompt = buildSiteGenerationPrompt(completeInput);
+
+    expect(prompt.system).toContain(
+      "모든 페이지의 header, nav, footer는 같은 HTML 구조와 같은 CSS를 그대로 반복하세요.",
+    );
+    expect(prompt.system).toContain(
+      "페이지마다 메뉴 순서, 로고 크기, 색, 여백, 글자 크기를 바꾸지 마세요.",
+    );
+  });
+
+  it("로그인·회원가입을 고르면 메뉴에 로그인 버튼을 넣게 한다", () => {
+    const prompt = buildSiteGenerationPrompt({
+      ...completeInput,
+      pageComponents: ["company_intro", "auth"],
+    });
+
+    expect(prompt.system).toContain('href="/login"');
+    expect(prompt.system).toContain("로그인");
+    expect(prompt.system).toContain("로그인 폼이나 회원가입 폼은 HTML로 만들지 마세요");
+  });
+
+  it("로그인·회원가입을 고르지 않으면 메뉴에 로그인 버튼을 요구하지 않는다", () => {
+    const prompt = buildSiteGenerationPrompt(completeInput);
+
+    expect(prompt.system).not.toContain('href="/login"');
+  });
+
   it("게시판 이름과 목록 주소를 생성 요청에 넣고 글 내용은 만들지 않게 한다", () => {
     const prompt = buildSiteGenerationPrompt({
       ...completeInput,
